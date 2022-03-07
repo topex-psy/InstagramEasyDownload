@@ -1,16 +1,17 @@
 var isReady = false;
 var analyzeInterval;
+var currentTabID;
 var currentURL;
 var pics = [];
 
-chrome.browserAction.onClicked.addListener(onIconClick);
+chrome.action.onClicked.addListener(onIconClick);
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   console.log("on action", request, sender);
   let { action } = request;
   let response = {ok: true};
   switch (action) {
     case 'clickIcon':
-      chrome.tabs.getSelected(null, onIconClick);
+      getCurrentTab(onIconClick);
       break;
   }
   sendResponse({action, ...response});
@@ -21,14 +22,30 @@ chrome.tabs.onActivated.addListener(function(info) {
   analyzeTab();
 });
 
-chrome.tabs.onUpdated.addListener(function(tabId, info, tab) {
+chrome.tabs.onUpdated.addListener(async function(tabId, info, tab) {
   console.log('[IED] tab updated', tabId, tab, info);
-  if (tab.selected && tab.status !== 'unloaded' && currentURL != tab.url) analyzeTab();
+  if (currentTabID != tabId && info.status === 'complete' && /^http/.test(tab.url)) {
+    await chrome.scripting.executeScript({
+      target: { tabId: tabId },
+      files: ["./foreground.js"]
+    });
+    console.log("[IED] INJECTED THE FOREGROUND SCRIPT.");
+    currentTabID = tabId;
+  }
+  if (tab.selected && tab.status !== 'unloaded' && currentURL != tab.url) {
+    analyzeTab();
+  }
 });
+
+async function getCurrentTab(todo) {
+  let queryOptions = { active: true, currentWindow: true, lastFocusedWindow: true };
+  let [tab] = await chrome.tabs.query(queryOptions);
+  todo(tab);
+}
 
 function onIconClick(tab) {
   if (isReady) {
-    console.log('[IED] download from', tab);
+    console.log('[IED] download from', tab, pics);
     chrome.tabs.sendMessage(+tab.id, { action: 'savePics', pics: pics });
   } else {
     console.log('[IED] tab not ready');
@@ -39,7 +56,7 @@ function onIconClick(tab) {
 
 function generateIcons(tabId, name) {
   console.log('[IED] set action icon', tabId, name);
-  chrome.browserAction.setIcon({tabId, path: {
+  chrome.action.setIcon({tabId, path: {
     "16": "icons/" + name + "16.png",
     "24": "icons/" + name + "24.png",
     "32": "icons/" + name + "32.png"
@@ -53,8 +70,8 @@ function analyze(tab) {
   const { url, status } = tab;
   const tabId = tab.id;
 
-  chrome.browserAction.setTitle({title: 'Open a Instagram post to download its photos', tabId});
-  chrome.browserAction.setBadgeText({'text': ''});
+  chrome.action.setTitle({title: 'Open a Instagram post to download its photos', tabId});
+  chrome.action.setBadgeText({'text': ''});
   generateIcons(tabId, 'disabled');
 
   if (url) {
@@ -86,9 +103,9 @@ function analyze(tab) {
               const picCount = pics.length;
               console.log("[IED] pics count", picCount);
               if (picCount) {
-                chrome.browserAction.setTitle({title: `Download ${picCount} photos (or press Ctrl+S)`, tabId});
-                chrome.browserAction.setBadgeText({'text': `${picCount}`});
-                chrome.browserAction.setBadgeBackgroundColor({'color': '#333333'});
+                chrome.action.setTitle({title: `Download ${picCount} photos (or press Ctrl+S)`, tabId});
+                chrome.action.setBadgeText({'text': `${picCount}`});
+                chrome.action.setBadgeBackgroundColor({'color': '#333333'});
                 generateIcons(tabId, 'icon');
                 isReady = true;
               }
@@ -96,14 +113,14 @@ function analyze(tab) {
           });
         }, 1000);
       } else {
-        chrome.browserAction.setTitle({title: 'Please wait ...', tabId});
+        chrome.action.setTitle({title: 'Please wait ...', tabId});
       }
     }
   }
 };
 
 function analyzeTab() {
-  chrome.tabs.getSelected(null, analyze);
+  getCurrentTab(analyze);
 }
 
 analyzeTab();
