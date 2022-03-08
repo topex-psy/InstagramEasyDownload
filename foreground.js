@@ -1,9 +1,12 @@
+var IED_reverse = false;
+
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   let { action, pics } = request;
   let detect = [];
   let images = document.querySelectorAll('article[role="presentation"] div[role="presentation"] img[src]');
   if (!images.length) images = document.querySelectorAll('article[role="presentation"] img[srcset][src]');
-  if (!images.length) images = [document.querySelectorAll('article[role="presentation"] img[src]')[0]];
+  if (!images.length) images = [document.querySelector('article[role="presentation"] img[src]')];
+  console.log('[IED] detected images', images);
   images.forEach(img => {
     // if (img.hasAttribute('srcset')) {
     //   let srcset = img.getAttribute('srcset');
@@ -15,8 +18,16 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   });
 
   let btnNext = document.querySelector('button[aria-label="Next"]');
-  let dotWrapper = btnNext?.parentElement.parentElement.parentElement.nextElementSibling;
+  let btnPrev = document.querySelector('button[aria-label="Go Back"]');
+  let btnNextPrev = document.querySelector('button[aria-label="Next"],button[aria-label="Go Back"]');
+
+  let dotWrapper = btnNextPrev?.parentElement.parentElement.parentElement.nextElementSibling;
   let dotCount = dotWrapper?.childElementCount || 0;
+  
+  if (!IED_reverse && !!!btnNext && pics.length < dotCount) IED_reverse = true;
+  else if (IED_reverse && !!!btnPrev && pics.length < dotCount) IED_reverse = false;
+  let btnToPress = IED_reverse ? btnPrev : btnNext;
+
   let dotActive = 0;
   for (let i = 0; i < dotCount; i++) {
     if (dotWrapper.childNodes[i].classList.length > 1) {
@@ -26,40 +37,8 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   }
   switch (action) {
     case 'detectPics':
-      if (pics.length < dotCount) btnNext?.click();
-      sendResponse({result: detect});
-      break;
-    case 'savePics':
-      sendResponse({result: downloadAll(pics)});
+      if (pics.length < dotCount) btnToPress?.click();
+      sendResponse({result: detect, total: dotCount ? dotCount : 1});
       break;
   }
 });
-
-document.onkeydown = (e) => {
-  let evtobj = window.event || e;
-  if (evtobj.keyCode == 83 && evtobj.ctrlKey) {
-    e.preventDefault();
-    chrome.runtime?.sendMessage({action: 'clickIcon'}, function(response) {
-      let error = chrome.runtime.lastError;
-      if (error) alert(error.message);
-    });
-  }
-};
-
-function downloadAll(pics) {
-  try {
-    pics.forEach(url => {
-      const a = document.createElement("a");
-      a.href = url;
-      a.target = '_blank';
-      a.download = url.split("/").pop();
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    });
-    return true;
-  } catch(err) {
-    return false;
-  }
-}
