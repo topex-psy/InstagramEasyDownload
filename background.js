@@ -139,7 +139,7 @@ function analyze(tab) {
               }
             }
           });
-        }, 500);
+        }, 250);
       } else {
         chrome.action.setTitle({title: 'Please wait ...', tabId});
       }

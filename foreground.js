@@ -13,7 +13,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     //   let src = srcset.split(' ')[0];
     //   detect.push(src);
     // } else {
-      detect.push(img.src);
+      if (!!img) detect.push(img.src);
     // }
   });
 
@@ -37,7 +37,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   }
   switch (action) {
     case 'detectPics':
-      if (pics.length < dotCount) btnToPress?.click();
+      if (pics.length != dotCount) btnToPress?.click();
       sendResponse({result: detect, total: dotCount ? dotCount : 1});
       break;
   }
