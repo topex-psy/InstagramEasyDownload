@@ -8,7 +8,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
       if (firstPost) {
         if (firstPost.href.includes('liked_by')) {
           alert("Please open an Instagram account page.");
-        } else if (confirm("Are you sure you want to mass download all photos in this Instagram?\nYou can also open a post to download its photos respectively.")) {
+        } else if (confirm("Are you sure you want to mass download all photos in this Instagram?\n(You can also open a post to download its photos respectively.)")) {
           bulkDownload = true;
           alert("Bulk download will start. Press Esc anytime to stop the operation.");
           firstPost.click();
@@ -19,9 +19,9 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
       sendResponse({result: bulkDownload});
       break;
     case 'nextPost':
-      const button = document.querySelector('body > div[role="presentation"] > div:nth-child(2) > div > div:last-child > button');
-      const buttonLabel = button?.querySelector('svg').getAttribute('aria-label');
-      const onNext = buttonLabel == 'Next';
+      let button = document.querySelector('body > div[role="presentation"] > div:nth-child(2) > div > div:last-child > button');
+      let buttonLabel = button?.querySelector('svg').getAttribute('aria-label');
+      let onNext = buttonLabel == 'Next';
       if (onNext) button.click();
       sendResponse({result: onNext});
       break;
@@ -29,7 +29,15 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
       let detect = [];
       let images = document.querySelectorAll('article[role="presentation"] div[role="presentation"] img[src]');
       if (!images.length) images = document.querySelectorAll('article[role="presentation"] img[srcset][src]');
-      if (!images.length) images = [document.querySelector('article[role="presentation"] img[src]')];
+      if (!images.length) {
+        let possibleImage = document.querySelector('article[role="presentation"] img[src]');
+        if (possibleImage?.dataset['testid'] == 'user-avatar') {
+          sendResponse({video: true, total: 1});
+          break;
+        } else {
+          images = [possibleImage];
+        }
+      }
       images.forEach(img => {
         // if (img.hasAttribute('srcset')) {
         //   let srcset = img.getAttribute('srcset');
