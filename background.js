@@ -3,9 +3,21 @@ var analyzeInterval;
 var currentTab;
 var pics = [];
 var picTotal = 0;
+var picNext = true;
+var bulkDownload;
 
 chrome.action.onClicked.addListener(onIconClick);
-
+chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
+  console.log("[IED] action from foreground", request, sender);
+  let { action } = request;
+  let response = {ok: true};
+  switch (action) {
+    case 'escapeKey':
+      if (bulkDownload == currentTab.id) bulkDownload = null;
+      break;
+  }
+  sendResponse({action, ...response});
+});
 chrome.tabs.onActivated.addListener(function(info) {
   console.log('[IED] tab activated', info);
   analyzeTab();
@@ -30,15 +42,15 @@ async function getCurrentTab(todo) {
 }
 
 function isURLInstagram(url) {
-  return /https:\/\/[\w]+\.instagram\.com/.test(url);
+  return url && /https:\/\/[\w]+\.instagram\.com/.test(url);
 }
 function isURLPostPage(url) {
-  return /https:\/\/[\w]+\.instagram\.com\/p\//.test(url);
+  return url && /https:\/\/[\w]+\.instagram\.com\/p\//.test(url);
 }
-
 function downloadAll(pics) {
   try {
     pics.forEach(url => {
+      // alt 1
       const a = document.createElement("a");
       a.href = url;
       a.target = '_blank';
@@ -47,6 +59,11 @@ function downloadAll(pics) {
       document.body.appendChild(a);
       a.click();
       a.remove();
+
+      // alt 2
+      // let popup = window.open(url);
+      // popup.blur();
+      // window.focus();
     });
     return true;
   } catch(err) {
@@ -57,15 +74,36 @@ function downloadAll(pics) {
 function onIconClick() {
   console.log('[IED] onIconClick', currentTab, isReady);
   if (!!currentTab && isReady) {
-    console.log('[IED] download from', currentTab, pics);
-    chrome.scripting.executeScript({
-      target: {tabId: currentTab.id},
-      func: downloadAll,
-      args: [pics]
-    });
+    const {url} = currentTab;
+    const isInstagram = isURLInstagram(url);
+    const isPostPage = isURLPostPage(url);
+    if (isPostPage) {
+      console.log('[IED] download from', currentTab, pics);
+      chrome.scripting.executeScript({
+        target: {tabId: currentTab.id},
+        func: downloadAll,
+        args: [pics]
+      });
+    } else if (isInstagram) {
+      if (bulkDownload == currentTab.id) {
+        bulkDownload = null;
+        analyzeTab();
+        return;
+      }
+      chrome.tabs.sendMessage(currentTab.id, { action: 'bulkDownload' }, function(response) {
+        let error = chrome.runtime.lastError;
+        if (error) {
+          console.log('[IED] bulkDownload error:', error.message);
+        } else if (response?.result) {
+          bulkDownload = currentTab.id;
+        }
+      });
+    } else {
+      console.log('[IED] tab is not instagram');
+      analyzeTab();
+    }
   } else {
     console.log('[IED] tab not ready');
-    // alert("No image to download. Make sure you open a Instagram post page in current tab.");
     analyzeTab();
   }
 }
@@ -91,60 +129,91 @@ function resetPics() {
 
 function analyze(tab) {
   console.log("[IED] analyze tab", tab);
-  if (!!!tab) return;
+  if (!!!tab || !tab.selected || !tab.active) return;
   
-  const { url, status, selected, active } = tab;
+  const { url, status } = tab;
+  const isInstagram = isURLInstagram(url);
+  const isPostPage = isURLPostPage(url);
   const tabId = tab.id;
-  
-  chrome.action.setTitle({title: 'Open a Instagram post to download its photos', tabId});
-  chrome.action.setBadgeText({'text': ''});
-  generateIcons(tabId, 'disabled');
-  resetPics();
-  isReady = false;
 
-  if (url && selected && active) {
-    const isInstagram = isURLInstagram(url);
-    const isPostPage = isURLPostPage(url);
-    console.log("[IED] is instagram", isInstagram);
-    console.log("[IED] is post page", isPostPage);
-    
-    if (isPostPage) {
-      if (status === "complete") {
-        console.log("[IED] load post complete");
-        currentTab = tab;
-        if (!!!analyzeInterval) analyzeInterval = setInterval(() => {
-          console.log("[IED] counting pics ...");
-          chrome.tabs.sendMessage(tabId, { action: 'detectPics', pics: pics }, function(response) {
-            let error = chrome.runtime.lastError;
-            if (error) {
-              console.log('[IED] action error', error.message);
-            } else {
-              const detected = response?.result || [];
-              picTotal = response?.total || 0;
-              detected.forEach((pic) => {
-                if (!pics.includes(pic)) pics.push(pic);
-              });
-              const picCount = pics.length;
-              console.log("[IED] pics count", picCount, '/', picTotal);
-              if (picCount) {
-                chrome.action.setTitle({title: `Download all ${picCount} photos in 1-click`, tabId});
-                chrome.action.setBadgeText({'text': `${picCount}`});
-                chrome.action.setBadgeBackgroundColor({'color': '#333333'});
-                generateIcons(tabId, 'icon');
-                isReady = true;
-                if (picCount == picTotal) {
-                  console.log("[IED] pics detection completed!");
-                  stopCounting();
-                }
+  console.log("[IED] is instagram", isInstagram, status);
+  console.log("[IED] is post page", isPostPage);
+  isReady = false;
+  resetPics();
+
+  if (!isInstagram || !!!url.split('instagram.com/').pop()) {
+    chrome.action.setTitle({title: 'Open a Instagram post to download its photos', tabId});
+    chrome.action.setBadgeText({'text': ''});
+    generateIcons(tabId, 'disabled');
+    return;
+  }
+
+  if (status !== "complete") {
+    chrome.action.setTitle({title: 'Loading content. Please wait ...', tabId});
+    chrome.action.setBadgeText({'text': ''});
+    generateIcons(tabId, 'disabled');
+    return;
+  }
+  
+  console.log("[IED] load tab complete");
+  currentTab = tab;
+
+  if (isPostPage) {
+    if (!!!analyzeInterval) analyzeInterval = setInterval(() => {
+      console.log("[IED] counting pics ...");
+      chrome.tabs.sendMessage(tabId, { action: 'detectPics', pics: pics, next: picNext }, function(response) {
+        let error = chrome.runtime.lastError;
+        if (error) {
+          console.log('[IED] detectPics error:', error.message);
+        } else {
+          const detected = response?.result || [];
+          picTotal = response?.total || 0;
+          picNext = response?.next || true;
+          detected.forEach((pic) => {
+            if (!pics.includes(pic)) pics.push(pic);
+          });
+          const picCount = pics.length;
+          console.log("[IED] pics count", picCount, '/', picTotal);
+          if (picCount) {
+            chrome.action.setTitle({title: `Download all ${picCount} photos in 1-click`, tabId});
+            chrome.action.setBadgeBackgroundColor({'color': '#333333'});
+            chrome.action.setBadgeText({'text': `${picCount}`});
+            generateIcons(tabId, 'icon');
+            isReady = true;
+            if (picCount == picTotal) {
+              console.log("[IED] pics detection completed!");
+              stopCounting();
+              if (bulkDownload == currentTab.id) {
+                onIconClick();
+                chrome.tabs.sendMessage(currentTab.id, { action: 'nextPost' }, function(response) {
+                  let error = chrome.runtime.lastError;
+                  if (error) {
+                    console.log('[IED] nextPost error:', error.message);
+                  } else if (!response?.result) {
+                    bulkDownload = null;
+                  }
+                });
               }
             }
-          });
-        }, 250);
-      } else {
-        chrome.action.setTitle({title: 'Please wait ...', tabId});
-      }
-    }
+          }
+        }
+      });
+    }, 250);
+    chrome.action.setTitle({title: 'Counting photos. Please wait ...', tabId});
+    chrome.action.setBadgeText({'text': ''});
+    generateIcons(tabId, 'disabled');
+  } else if (bulkDownload == tabId) {
+    chrome.action.setTitle({title: 'Cancel photos bulk download operation', tabId});
+    chrome.action.setBadgeBackgroundColor({'color': '#a1183d'});
+    chrome.action.setBadgeText({'text': 'Stop'});
+    generateIcons(tabId, 'icon');
+  } else {
+    chrome.action.setTitle({title: 'Open a post to download its photos in 1-click', tabId});
+    chrome.action.setBadgeBackgroundColor({'color': '#333333'});
+    chrome.action.setBadgeText({'text': 'All'});
+    generateIcons(tabId, 'icon');
   }
+  isReady = true;
 };
 
 function analyzeTab() {
