@@ -1,13 +1,15 @@
 var isReady = false;
-var analyzeInterval;
+var detectInterval;
 var pics = [];
 var picTotal = 0;
 var picNext = true;
 var bulkDownload;
 var currentTab;
 var fetchController;
+var inFocus = true;
 
-const detectGetTimeout = 1000;
+const fetchTimeout = 1000;
+
 
 chrome.action.onClicked.addListener(onIconClick);
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
@@ -31,6 +33,11 @@ chrome.tabs.onUpdated.addListener(async function(tabId, info, tab) {
   if (info.status == 'complete' && tab.selected && tab.active) {
     analyze(tab);
   }
+});
+chrome.windows.onFocusChanged.addListener(function(window) {
+  inFocus = window != chrome.windows.WINDOW_ID_NONE;
+  console.log('[IED] window focus', inFocus);
+  if (inFocus) analyzeTab();
 });
 
 async function getCurrentTab(todo) {
@@ -97,6 +104,7 @@ function onIconClick() {
         console.log('[IED] bulkDownload error:', error.message);
       } else if (response?.result) {
         bulkDownload = currentTab.id;
+        analyzeTab();
       }
     });
   } else {
@@ -122,9 +130,9 @@ function stopBulkDownload() {
   analyzeTab();
 }
 
-function stopCounting() {
-  clearInterval(analyzeInterval);
-  analyzeInterval = null;
+function stopDetect() {
+  clearInterval(detectInterval);
+  detectInterval = null;
 }
 
 function analyze(tab) {
@@ -139,11 +147,11 @@ function analyze(tab) {
   console.log("[IED] is instagram", isInstagram, status);
   console.log("[IED] is post page", isPostPage);
   currentTab = tab;
-  stopCounting();
+  stopDetect();
   pics.length = 0;
 
   if (!isInstagram || !!!url.split('instagram.com/').pop()) {
-    chrome.action.setTitle({title: 'Open a Instagram post to download its photos or video', tabId});
+    chrome.action.setTitle({title: 'Open a Instagram post to download its photos and video', tabId});
     chrome.action.setBadgeText({'text': ''});
     generateIcons(tabId, 'disabled');
     return;
@@ -160,16 +168,16 @@ function analyze(tab) {
 
   if (isPostPage) {
     detectGet(tab);
-    chrome.action.setTitle({title: 'Counting photos. Please wait ...', tabId});
+    chrome.action.setTitle({title: 'Counting photos and videos. Please wait ...', tabId});
     chrome.action.setBadgeText({'text': ''});
     generateIcons(tabId, 'disabled');
   } else if (bulkDownload == tabId) {
-    chrome.action.setTitle({title: 'Cancel photos bulk download operation', tabId});
+    chrome.action.setTitle({title: 'Cancel bulk download operation', tabId});
     chrome.action.setBadgeBackgroundColor({'color': '#a1183d'});
     chrome.action.setBadgeText({'text': 'Stop'});
     generateIcons(tabId, 'icon');
   } else {
-    chrome.action.setTitle({title: 'Bulk download / Open a post to download its photos in 1-click', tabId});
+    chrome.action.setTitle({title: 'Bulk download photos and videos HD in 1-click', tabId});
     chrome.action.setBadgeBackgroundColor({'color': '#333333'});
     chrome.action.setBadgeText({'text': 'All'});
     generateIcons(tabId, 'icon');
@@ -185,7 +193,7 @@ function setDownloadIcon(tab, type, picCount, picTotal) {
   generateIcons(tab.id, 'icon');
   if (picCount == picTotal) {
     console.log("[IED] detection completed!");
-    stopCounting();
+    stopDetect();
     if (bulkDownload == tab.id) {
       onIconClick();
       chrome.tabs.sendMessage(tab.id, { action: 'nextPost' }, function(response) {
@@ -201,7 +209,7 @@ function setDownloadIcon(tab, type, picCount, picTotal) {
 }
 
 function detectDOM(tab) {
-  if (!!!analyzeInterval) analyzeInterval = setInterval(() => {
+  if (!!!detectInterval) detectInterval = setInterval(() => {
     console.log("[IED] counting pics ...");
     chrome.tabs.sendMessage(tab.id, { action: 'detectPics', pics: pics, next: picNext }, function(response) {
       let error = chrome.runtime.lastError;
@@ -219,7 +227,7 @@ function detectDOM(tab) {
 }
 
 function detectGet(tab) {
-  fetchWithTimeout(tab.url + '?__a=1', { timeout: detectGetTimeout }).then(res => res.json()).then(data => {
+  fetchWithTimeout(tab.url + '?__a=1', { timeout: fetchTimeout }).then(res => res.json()).then(data => {
     getCurrentTab((tabCurrent) => {
       if (tabCurrent?.url !== tab.url) {
         console.log('[IED] read json aborted because url changed');

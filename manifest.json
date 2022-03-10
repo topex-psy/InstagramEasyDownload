@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Instagram Easy Download",
-  "version": "0.0.3",
-  "description": "1-Click to download all instagram photos and video HQ.",
+  "version": "0.0.4",
+  "description": "1-Click to download all instagram photos and video HD.",
   "author": "Taufik Nur Rahmanda",
   "permissions": [
     "scripting"
@@ -11,7 +11,7 @@
     "https://*.instagram.com/*"
   ],
   "action": {
-    "default_title": "Open a Instagram post to download its photos or video",
+    "default_title": "Open a Instagram post to download its photos and video",
     "default_icon": {
       "16": "icons/icon16.png",
       "24": "icons/icon24.png",

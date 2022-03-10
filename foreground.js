@@ -10,8 +10,8 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
           alert("Please open an Instagram account page.");
         } else if (confirm("Are you sure you want to mass download all photos in this Instagram?\n(You can also open a post to download its photos respectively.)")) {
           bulkDownload = true;
-          alert("Bulk download will start. Press Esc anytime to stop the operation.");
-          firstPost.click();
+          alert("1. Click the first (newest) post to start bulk download.\n2. Press Esc anytime to stop the operation.");
+          // firstPost.click();
         }
       } else {
         alert('No post found in this page!');
@@ -22,7 +22,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
       let button = document.querySelector('body > div[role="presentation"] > div:nth-child(2) > div > div:last-child > button');
       let buttonLabel = button?.querySelector('svg').getAttribute('aria-label');
       let onNext = buttonLabel == 'Next';
-      if (onNext) button.click();
+      if (onNext) button.click(); else alert("Last post has been reached. Bulk download finished!");
       sendResponse({result: onNext});
       break;
     case 'detectPics':
