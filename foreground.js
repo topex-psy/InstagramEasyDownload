@@ -29,15 +29,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
       let detect = [];
       let images = document.querySelectorAll('article[role="presentation"] div[role="presentation"] img[src]');
       if (!images.length) images = document.querySelectorAll('article[role="presentation"] img[srcset][src]');
-      if (!images.length) {
-        let possibleImage = document.querySelector('article[role="presentation"] img[src]');
-        if (possibleImage?.dataset['testid'] == 'user-avatar') {
-          sendResponse({video: true, total: 1});
-          break;
-        } else {
-          images = [possibleImage];
-        }
-      }
+      if (!images.length) images = [document.querySelector('article[role="presentation"] img[src]')];
       images.forEach(img => {
         // if (img.hasAttribute('srcset')) {
         //   let srcset = img.getAttribute('srcset');
@@ -75,7 +67,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
 document.onkeydown = (e) => {
   if (e.key === "Escape") {
     // e.preventDefault();
-    chrome.runtime?.sendMessage({action: 'escapeKey'}, function(response) {
+    chrome.runtime?.sendMessage({action: 'escapeKey', url: window.location.href}, function(response) {
       let error = chrome.runtime.lastError;
       if (error) {
         console.log('[IED] escapeKey error', error.message);
