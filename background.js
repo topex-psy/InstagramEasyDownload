@@ -17,9 +17,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   switch (action) {
     case 'escapeKey':
       if (isURLPostPage(url)) break;
-      bulkDownload = null;
-      fetchController?.abort();
-      analyzeTab();
+      stopBulkDownload();
       break;
   }
   sendResponse({action, ...response});
@@ -90,8 +88,7 @@ function onIconClick() {
     });
   } else if (isInstagram) {
     if (bulkDownload == currentTab.id) {
-      bulkDownload = null;
-      analyzeTab();
+      stopBulkDownload();
       return;
     }
     chrome.tabs.sendMessage(currentTab.id, { action: 'bulkDownload' }, function(response) {
@@ -117,6 +114,12 @@ function generateIcons(tabId, name) {
   }});
   isReady = name == 'icon';
   console.log('[IED] isReady', isReady);
+}
+
+function stopBulkDownload() {
+  bulkDownload = null;
+  fetchController?.abort();
+  analyzeTab();
 }
 
 function stopCounting() {
