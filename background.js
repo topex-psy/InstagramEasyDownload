@@ -218,7 +218,7 @@ function detectDOM(tab) {
 function detectGet(tab) {
   fetchWithTimeout(tab.url + '?__a=1', { timeout: detectGetTimeout }).then(res => res.json()).then(data => {
     getCurrentTab((tabCurrent) => {
-      if (tabCurrent.url !== tab.url) {
+      if (tabCurrent?.url !== tab.url) {
         console.log('[IED] read json aborted because url changed');
         return;
       }
