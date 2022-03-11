@@ -8,9 +8,8 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
       if (firstPost) {
         if (firstPost.href.includes('liked_by')) {
           alert("Please open an Instagram account page.");
-        } else if (confirm("Are you sure you want to mass download all photos in this Instagram?\n(You can also open a post to download its photos respectively.)")) {
+        } else if (confirm("Are you sure you want to mass download all photos and videos in this Instagram?\n\n1. Click the first (newest) post to start bulk download.\n2. Press Esc anytime to stop the operation.")) {
           bulkDownload = true;
-          alert("1. Click the first (newest) post to start bulk download.\n2. Press Esc anytime to stop the operation.");
           // firstPost.click();
         }
       } else {
