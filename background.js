@@ -8,8 +8,7 @@ var currentTab;
 var fetchController;
 var inFocus = true;
 
-const fetchTimeout = 1000;
-
+const fetchTimeout = 2000;
 
 chrome.action.onClicked.addListener(onIconClick);
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
@@ -234,10 +233,22 @@ function detectGet(tab) {
         return;
       }
       console.log('[IED] read json success', JSON.stringify(data, null, 2));
-      let carouselMedia = data.items[0].carousel_media;
       let imageVersions = data.items[0].image_versions2;
       let videoVersions = data.items[0].video_versions;
-      if (videoVersions) {
+      let carouselMedia = data.items[0].carousel_media;
+      if (carouselMedia) {
+        let imageUrl, videoUrl;
+        carouselMedia.forEach((media) => {
+          imageUrl = media.image_versions2.candidates[0].url;
+          videoUrl = media.video_versions[0].url;
+          if (videoUrl && !pics.includes(videoUrl)) {
+            pics.push(videoUrl);
+          } else if (imageUrl && !pics.includes(imageUrl)) {
+            pics.push(imageUrl);
+          }
+        });
+        setDownloadIcon(tab, videoUrl ? 'video' : 'photo', pics.length, carouselMedia.length);
+      } else if (videoVersions) {
         let videoUrl = videoVersions[0].url;
         if (videoUrl && !pics.includes(videoUrl)) {
           pics.push(videoUrl);
@@ -249,14 +260,6 @@ function detectGet(tab) {
           pics.push(imageUrl);
           setDownloadIcon(tab, 'photo', pics.length, 1);
         }
-      } else if (carouselMedia) {
-        carouselMedia.forEach((media) => {
-          let imageUrl = media.image_versions2.candidates[0].url;
-          if (imageUrl && !pics.includes(imageUrl)) {
-            pics.push(imageUrl);
-          }
-        });
-        setDownloadIcon(tab, 'photo', pics.length, carouselMedia.length);
       }
     });
   }).catch(err => {
