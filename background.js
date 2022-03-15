@@ -240,7 +240,7 @@ function detectGet(tab) {
         let imageUrl, videoUrl;
         carouselMedia.forEach((media) => {
           imageUrl = media.image_versions2.candidates[0].url;
-          videoUrl = media.video_versions[0].url;
+          videoUrl = media.video_versions ? media.video_versions[0].url : null;
           if (videoUrl && !pics.includes(videoUrl)) {
             pics.push(videoUrl);
           } else if (imageUrl && !pics.includes(imageUrl)) {
