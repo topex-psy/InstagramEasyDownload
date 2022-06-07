@@ -49,7 +49,10 @@ function isURLInstagram(url) {
   return url && /https:\/\/[\w]+\.instagram\.com/.test(url);
 }
 function isURLPostPage(url) {
-  return url && /https:\/\/[\w]+\.instagram\.com\/p\//.test(url);
+  return url && (
+    /https:\/\/[\w]+\.instagram\.com\/p\//.test(url) ||
+    /https:\/\/[\w]+\.instagram\.com\/reel\//.test(url)
+  );
 }
 function downloadAll(pics) {
   try {
@@ -226,13 +229,24 @@ function detectDOM(tab) {
 }
 
 function detectGet(tab) {
-  fetchWithTimeout(tab.url + '?__a=1', { timeout: fetchTimeout }).then(res => res.json()).then(data => {
+  const fetchUrl = tab.url + (tab.url.includes('?') ? '&' : '?') + '__a=1';
+  fetchWithTimeout(fetchUrl, { timeout: fetchTimeout }).then(res => res.json()).then(data => {
     getCurrentTab((tabCurrent) => {
       if (tabCurrent?.url !== tab.url) {
         console.log('[IED] read json aborted because url changed');
         return;
       }
       console.log('[IED] read json success', JSON.stringify(data, null, 2));
+      // TODO FIXME read json got this: https://www.instagram.com/p/CdCRRjvBZS5/?__a=1
+      // read json success {
+      //   "message": "",
+      //   "spam": true,
+      //   "status": "fail"
+      // }
+      if (!data.items) {
+        console.warn('[IED] read json got spam=true');
+        return;
+      }
       let imageVersions = data.items[0].image_versions2;
       let videoVersions = data.items[0].video_versions;
       let carouselMedia = data.items[0].carousel_media;
