@@ -1,5 +1,6 @@
 var isReady = false;
 var pics = [];
+var vids = [];
 var picTotal = 0;
 var bulkDownload;
 var currentTab;
@@ -14,6 +15,9 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   let { action, url } = request;
   let response = {ok: true};
   switch (action) {
+    case 'clickIcon':
+      onIconClick();
+      break;
     case 'escapeKey':
       if (isURLInstagramPost(url)) break;
       stopBulkDownload();
@@ -100,7 +104,7 @@ function onIconClick() {
     chrome.scripting.executeScript({
       target: {tabId: currentTab.id},
       func: downloadAll,
-      args: [pics]
+      args: [[...pics, ...vids]]
     });
   } else if (isInstagram) {
     if (bulkDownload == currentTab.id) {
@@ -157,6 +161,7 @@ function analyze(tab) {
   currentTab = tab;
 
   pics.length = 0;
+  vids.length = 0;
 
   let site;
 
@@ -216,7 +221,8 @@ function setDownloadIcon(tab, site, type, picCount, picTotal) {
     console.log("[IED] detection completed!");
 
     // put download button in foreground
-    chrome.tabs.sendMessage(tab.id, { action: 'putDownloadButton', picTotal }, function(response) {
+    let iconURL = chrome.runtime.getURL("/icons/icon24.png");
+    chrome.tabs.sendMessage(tab.id, { action: 'putDownloadButton', picTotal, iconURL }, function(response) {
       let error = chrome.runtime.lastError;
       if (error) return console.log(`[IED] putDownloadButton ${site} error:`, error.message);
       console.log(`[IED] putDownloadButton ${site} result:`, response?.result);
@@ -256,8 +262,8 @@ function detectDOM(tab, site, next = true) {
   });
 }
 
-function pushPic(url) {
-  if (!pics.includes(url)) pics.push(url);
+function pushPic(url, type = 'photo') {
+  if (!pics.includes(url) && !pics.map((pic) => pic.split('?')[0]).includes(url.split('?')[0])) pics.push(url);
 }
 
 function fetchTwitterVideo(tab) {
@@ -305,23 +311,20 @@ function fetchInstagramPost(tab) {
         carouselMedia.forEach((media) => {
           imageUrl = media.image_versions2.candidates[0].url;
           videoUrl = media.video_versions ? media.video_versions[0].url : null;
-          if (videoUrl && !pics.includes(videoUrl)) {
-            pics.push(videoUrl);
-          } else if (imageUrl && !pics.includes(imageUrl)) {
-            pics.push(imageUrl);
-          }
+          if (videoUrl) pushPic(videoUrl, 'video');
+          else if (imageUrl) pushPic(imageUrl);
         });
         setDownloadIcon(tab, 'instagram', videoUrl ? 'video' : 'photo', pics.length, carouselMedia.length);
       } else if (videoVersions) {
         let videoUrl = videoVersions[0].url;
-        if (videoUrl && !pics.includes(videoUrl) && !pics.map((pic) => pic.split('?')[0]).includes(videoUrl.split('?')[0])) {
-          pics.push(videoUrl);
+        if (videoUrl) {
+          pushPic(videoUrl, 'video');
           setDownloadIcon(tab, 'instagram', 'video', pics.length, 1);
         }
       } else if (imageVersions) {
         let imageUrl = imageVersions.candidates[0].url;
-        if (imageUrl && !pics.includes(imageUrl) && !pics.map((pic) => pic.split('?')[0]).includes(imageUrl.split('?')[0])) {
-          pics.push(imageUrl);
+        if (imageUrl) {
+          pushPic(imageUrl);
           setDownloadIcon(tab, 'instagram', 'photo', pics.length, 1);
         }
       }

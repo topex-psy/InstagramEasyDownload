@@ -1,5 +1,50 @@
+const __IED_downloadButtonID = '__IED_downloadButton';
+const __IED_clickIcon = () => {
+  chrome.runtime?.sendMessage({action: 'clickIcon', url: window.location.href}, function(response) {
+    let error = chrome.runtime.lastError;
+    if (error) return console.warn('[IED] clickIcon error', error.message);
+    console.log('[IED] clickIcon response', response);
+  });
+}
+const __IED_injectCSS = () => {
+  var css = document.createElement("style");
+  css.innerHTML = `
+  #${__IED_downloadButtonID} {
+    display: flex;
+    align-items: center;
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    border: 0;
+    border-radius: 2rem;
+    padding: 0.5rem 1.25rem;
+    font-weight: 600;
+    color: #fff;
+    background: linear-gradient(45deg, #42a661, #4bc3fd);
+    box-shadow: 2px 2px 6px -4px #000;
+    cursor: pointer;
+  }
+  #${__IED_downloadButtonID} img {
+    margin-right: 0.5rem;
+  }
+  #${__IED_downloadButtonID} span {
+    background: #00000045;
+    border-radius: 50%;
+    width: 1.5rem;
+    display: inline-block;
+    line-height: 1.5rem;
+    margin-left: 0.4rem;
+    margin-right: -0.5rem;
+  }
+  #${__IED_downloadButtonID}:hover {
+    filter: brightness(1.1);
+  }`;
+  document.head.appendChild(css);
+}
+__IED_injectCSS();
+
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
-  let { action, next } = request;
+  let { action, next, picTotal, iconURL } = request;
   console.log("[IED] got action:", action, next);
   
   switch (action) {
@@ -26,6 +71,21 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
       sendResponse({result: onNext});
       break;
     case 'putDownloadButton':
+      let btn = document.createElement("button");
+      btn.innerHTML = `Download<span>${picTotal}</span>`;
+      let icon = document.createElement("img");
+      icon.src = iconURL;
+      btn.prepend(icon);
+      btn.id = __IED_downloadButtonID;
+      btn.addEventListener('click', __IED_clickIcon);
+      setTimeout(() => { // waiting for container element
+        let container = document.querySelector('article[role="presentation"] div[role="presentation"]') ||
+                        document.querySelector('article[role="presentation"]') ||
+                        document.body;
+        let prevButton = document.getElementById(__IED_downloadButtonID);
+        prevButton?.remove();
+        container.appendChild(btn);
+      }, 1000);
       sendResponse({result: 'ok'});
       break;
     case 'detectPics':
@@ -92,14 +152,6 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
       break;
   }
 });
-
-function __IED_clickIcon() {
-  chrome.runtime?.sendMessage({action: 'clickIcon', url: window.location.href}, function(response) {
-    let error = chrome.runtime.lastError;
-    if (error) return console.warn('[IED] clickIcon error', error.message);
-    console.log('[IED] clickIcon response', response);
-  });
-}
 
 document.onkeydown = (e) => {
   if (e.key === "Escape") {
