@@ -16,7 +16,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   let response = {ok: true};
   switch (action) {
     case 'clickIcon':
-      onIconClick();
+      response.ok = onIconClick();
       break;
     case 'escapeKey':
       if (isURLInstagramPost(url)) break;
@@ -89,10 +89,10 @@ function downloadAll(pics) {
 
 function onIconClick() {
   console.log('[IED] onIconClick', currentTab, isReady);
-  if (!!!currentTab || !isReady) {
-    console.log('[IED] tab not ready');
+  if (!currentTab || !isReady) {
+    console.warn('[IED] tab not ready');
     analyzeTab();
-    return;
+    return false;
   }
   const { url } = currentTab;
   const isTwitterPost = isURLTwitterPost(url);
@@ -124,6 +124,7 @@ function onIconClick() {
     console.log('[IED] tab is not an instagram or tweet');
     analyzeTab();
   }
+  return true;
 }
 
 function generateIcons(tabId, name, suffix = '') {
@@ -211,7 +212,8 @@ function analyze(tab) {
 function setDownloadIcon(tab, site, type, picCount, picTotal) {
   console.log("[IED] detection count", picCount, '/', picTotal);
   if (!picCount) return;
-  chrome.action.setTitle({title: `Download ${picCount > 1 ? 'all ' : ''}${picCount} ${type}${picCount > 1 ? 's' : ''} in 1-click`, tabId: tab.id});
+  let what = `${type}${picCount > 1 ? 's' : ''}`;
+  chrome.action.setTitle({title: `Download ${picCount > 1 ? 'all ' : ''}${picCount} ${what} in 1-click`, tabId: tab.id});
   chrome.action.setBadgeBackgroundColor({'color': '#333333'});
   chrome.action.setBadgeText({'text': `${picCount}`});
   generateIcons(tab.id, site, '_download');
@@ -222,7 +224,7 @@ function setDownloadIcon(tab, site, type, picCount, picTotal) {
 
     // put download button in foreground
     let iconURL = chrome.runtime.getURL("/icons/icon24.png");
-    chrome.tabs.sendMessage(tab.id, { action: 'putDownloadButton', picTotal, iconURL }, function(response) {
+    chrome.tabs.sendMessage(tab.id, { action: 'putDownloadButton', type, picCount, iconURL }, function(response) {
       let error = chrome.runtime.lastError;
       if (error) return console.log(`[IED] putDownloadButton ${site} error:`, error.message);
       console.log(`[IED] putDownloadButton ${site} result:`, response?.result);
@@ -254,7 +256,7 @@ function detectDOM(tab, site, next = true) {
     setDownloadIcon(tab, site, 'photo', pics.length, picTotal);
     if (!picTotal || pics.length < picTotal) {
       detectDOM(tab, site, response?.canContinue ? next : !next);
-    } else if (videos.length) {
+    } else if (videos.length) { // only from twitter
       if (site == 'twitter') {
         fetchTwitterVideo(tab);
       }
