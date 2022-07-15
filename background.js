@@ -1,14 +1,12 @@
 var isReady = false;
-var detectInterval;
 var pics = [];
 var picTotal = 0;
-var picNext = true;
 var bulkDownload;
 var currentTab;
 var fetchController;
 var inFocus = true;
 
-const fetchTimeout = 2000;
+const fetchTimeout = 3000;
 
 chrome.action.onClicked.addListener(onIconClick);
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
@@ -17,7 +15,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   let response = {ok: true};
   switch (action) {
     case 'escapeKey':
-      if (isURLPostPage(url)) break;
+      if (isURLInstagramPost(url)) break;
       stopBulkDownload();
       break;
   }
@@ -28,7 +26,7 @@ chrome.tabs.onActivated.addListener(function(info) {
   analyzeTab();
 });
 chrome.tabs.onUpdated.addListener(async function(tabId, info, tab) {
-  console.log('[IED] tab updated', tabId, tab, info, isURLInstagram(tab.url));
+  console.log('[IED] tab updated', tabId, tab, info);
   if (info.status == 'complete' && tab.selected && tab.active) {
     analyze(tab);
   }
@@ -45,13 +43,20 @@ async function getCurrentTab(todo) {
   todo(tab);
 }
 
-function isURLInstagram(url) {
-  return url && /https:\/\/[\w]+\.instagram\.com/.test(url);
+function isURLTwitter(url) {
+  return url && /https:\/\/twitter\.com/.test(url);
 }
-function isURLPostPage(url) {
+function isURLTwitterPost(url) {
+  return url && /https:\/\/twitter\.com\/[\w]+\/status\/[\w]+/.test(url);
+}
+function isURLInstagram(url) {
+  // return url && /https:\/\/[\w]+\.instagram\.com/.test(url);
+  return url && /https:\/\/[\w]+\.(.*)instagram\.com/.test(url); // to support domain https://www.secure.instagram.com/
+}
+function isURLInstagramPost(url) {
   return url && (
-    /https:\/\/[\w]+\.instagram\.com\/p\//.test(url) ||
-    /https:\/\/[\w]+\.instagram\.com\/reel\//.test(url)
+    /https:\/\/[\w]+\.(.*)instagram\.com\/p\//.test(url) ||
+    /https:\/\/[\w]+\.(.*)instagram\.com\/reel\//.test(url)
   );
 }
 function downloadAll(pics) {
@@ -86,9 +91,11 @@ function onIconClick() {
     return;
   }
   const { url } = currentTab;
+  const isTwitterPost = isURLTwitterPost(url);
+  const isInstagramPost = isURLInstagramPost(url);
   const isInstagram = isURLInstagram(url);
-  const isPostPage = isURLPostPage(url);
-  if (isPostPage) {
+
+  if (isInstagramPost || isTwitterPost) {
     console.log('[IED] download photos from', currentTab, pics);
     chrome.scripting.executeScript({
       target: {tabId: currentTab.id},
@@ -110,19 +117,19 @@ function onIconClick() {
       }
     });
   } else {
-    console.log('[IED] tab is not instagram');
+    console.log('[IED] tab is not an instagram or tweet');
     analyzeTab();
   }
 }
 
-function generateIcons(tabId, name) {
+function generateIcons(tabId, name, suffix = '') {
   console.log('[IED] set action icon', tabId, name);
   chrome.action.setIcon({tabId, path: {
-    "16": "icons/" + name + "16.png",
-    "24": "icons/" + name + "24.png",
-    "32": "icons/" + name + "32.png"
+    "16": "icons/" + name + suffix + "16.png",
+    "24": "icons/" + name + suffix + "24.png",
+    "32": "icons/" + name + suffix + "32.png"
   }});
-  isReady = name == 'icon';
+  isReady = suffix != '_counting';
   console.log('[IED] isReady', isReady);
 }
 
@@ -132,70 +139,89 @@ function stopBulkDownload() {
   analyzeTab();
 }
 
-function stopDetect() {
-  clearInterval(detectInterval);
-  detectInterval = null;
-}
-
 function analyze(tab) {
   console.log("[IED] analyze tab", tab);
   if (!tab?.selected || !tab?.active) return;
   
   const { url, status } = tab;
   const isInstagram = isURLInstagram(url);
-  const isPostPage = isURLPostPage(url);
+  const isInstagramPost = isURLInstagramPost(url);
+  const isTwitter = isURLTwitter(url);
+  const isTwitterPost = isURLTwitterPost(url);
   const tabId = tab.id;
 
   console.log("[IED] is instagram", isInstagram, status);
-  console.log("[IED] is post page", isPostPage);
+  console.log("[IED] is instagram post", isInstagramPost);
+  console.log("[IED] is twitter", isTwitter);
+  console.log("[IED] is twitter post", isTwitterPost);
   currentTab = tab;
-  stopDetect();
+
   pics.length = 0;
 
-  if (!isInstagram || !!!url.split('instagram.com/').pop()) {
-    chrome.action.setTitle({title: 'Open a Instagram post to download its photos and video', tabId});
+  let site;
+
+  if (isTwitter) {
+    site = 'twitter';
+  } else if (isInstagram) {
+    site = 'instagram';
+  } else {
+    chrome.action.setTitle({title: 'Open an Instagram or Twitter post to download its photos and video HD', tabId});
     chrome.action.setBadgeText({'text': ''});
-    generateIcons(tabId, 'disabled');
+    generateIcons(tabId, 'icon');
     return;
   }
 
   if (status !== "complete") {
     chrome.action.setTitle({title: 'Loading content. Please wait ...', tabId});
     chrome.action.setBadgeText({'text': ''});
-    generateIcons(tabId, 'disabled');
+    generateIcons(tabId, site);
     return;
   }
   
   console.log("[IED] load tab complete");
 
-  if (isPostPage) {
-    detectGet(tab);
-    chrome.action.setTitle({title: 'Counting photos and videos. Please wait ...', tabId});
+  if (isTwitterPost) {
+    detectDOM(tab, 'twitter');
+    chrome.action.setTitle({title: 'Counting Twitter photos and videos ...', tabId});
     chrome.action.setBadgeText({'text': ''});
-    generateIcons(tabId, 'disabled');
+    generateIcons(tabId, site, '_counting');
+  } else if (isInstagramPost) {
+    fetchInstagramPost(tab);
+    chrome.action.setTitle({title: 'Counting Instagram photos and videos ...', tabId});
+    chrome.action.setBadgeText({'text': ''});
+    generateIcons(tabId, site, '_counting');
   } else if (bulkDownload == tabId) {
     chrome.action.setTitle({title: 'Cancel bulk download operation', tabId});
     chrome.action.setBadgeBackgroundColor({'color': '#a1183d'});
     chrome.action.setBadgeText({'text': 'Stop'});
-    generateIcons(tabId, 'icon');
+    generateIcons(tabId, site, '_counting');
   } else {
     chrome.action.setTitle({title: 'Bulk download photos and videos HD in 1-click', tabId});
     chrome.action.setBadgeBackgroundColor({'color': '#333333'});
     chrome.action.setBadgeText({'text': 'All'});
-    generateIcons(tabId, 'icon');
+    generateIcons(tabId, site, '_download');
   }
 };
 
-function setDownloadIcon(tab, type, picCount, picTotal) {
+function setDownloadIcon(tab, site, type, picCount, picTotal) {
   console.log("[IED] detection count", picCount, '/', picTotal);
   if (!picCount) return;
   chrome.action.setTitle({title: `Download ${picCount > 1 ? 'all ' : ''}${picCount} ${type}${picCount > 1 ? 's' : ''} in 1-click`, tabId: tab.id});
   chrome.action.setBadgeBackgroundColor({'color': '#333333'});
   chrome.action.setBadgeText({'text': `${picCount}`});
-  generateIcons(tab.id, 'icon');
+  generateIcons(tab.id, site, '_download');
+
+  // on detection complete
   if (picCount == picTotal) {
     console.log("[IED] detection completed!");
-    stopDetect();
+
+    // put download button in foreground
+    chrome.tabs.sendMessage(tab.id, { action: 'putDownloadButton', picTotal }, function(response) {
+      let error = chrome.runtime.lastError;
+      if (error) return console.log(`[IED] putDownloadButton ${site} error:`, error.message);
+      console.log(`[IED] putDownloadButton ${site} result:`, response?.result);
+    });
+
     if (bulkDownload == tab.id) {
       onIconClick();
       chrome.tabs.sendMessage(tab.id, { action: 'nextPost' }, function(response) {
@@ -210,41 +236,65 @@ function setDownloadIcon(tab, type, picCount, picTotal) {
   }
 }
 
-function detectDOM(tab) {
-  if (!!!detectInterval) detectInterval = setInterval(() => {
-    console.log("[IED] counting pics ...");
-    chrome.tabs.sendMessage(tab.id, { action: 'detectPics', pics: pics, next: picNext }, function(response) {
-      let error = chrome.runtime.lastError;
-      if (error) {
-        console.log('[IED] detectPics error:', error.message);
-      } else {
-        picTotal = response?.total || 0;
-        picNext = response?.next || true;
-        const detected = response?.result || [];
-        detected.forEach((pic) => { if (!pics.includes(pic)) pics.push(pic); });
-        setDownloadIcon(tab, 'photo', pics.length, picTotal);
+function detectDOM(tab, site, next = true) {
+  console.log(`[IED] counting ${site} pics ...`);
+  chrome.tabs.sendMessage(tab.id, { action: 'detectPics', next }, function(response) {
+    let error = chrome.runtime.lastError;
+    if (error) return console.log(`[IED] detectPics ${site} error:`, error.message);
+    picTotal = response?.total || 0;
+    const detected = response?.result || [];
+    const videos = response?.videos || [];
+    detected.forEach((pic) => { pushPic(pic); });
+    setDownloadIcon(tab, site, 'photo', pics.length, picTotal);
+    if (!picTotal || pics.length < picTotal) {
+      detectDOM(tab, site, response?.canContinue ? next : !next);
+    } else if (videos.length) {
+      if (site == 'twitter') {
+        fetchTwitterVideo(tab);
       }
-    });
-  }, 250);
+    }
+  });
 }
 
-function detectGet(tab) {
-  const fetchUrl = tab.url + (tab.url.includes('?') ? '&' : '?') + '__a=1';
-  fetchWithTimeout(fetchUrl, { timeout: fetchTimeout }).then(res => res.json()).then(data => {
+function pushPic(url) {
+  if (!pics.includes(url)) pics.push(url);
+}
+
+function fetchTwitterVideo(tab) {
+  let statusID = tab.url.split('/status/').pop().split('/')[0];
+  let fetchUrl = `https://cdn.syndication.twimg.com/tweet?id=${statusID}`;
+  console.log(`[IED] should fetch:`, fetchUrl);
+  fetchWithTimeout(fetchUrl, { timeout: 60000 }).then(data => {
+    console.log(`[IED] fetch result:`, data);
+    let variants = data.video?.variants.filter((variant) => variant.type == "video/mp4") || [];
+    let largest, lastSize = 0;
+    variants.forEach((variant) => {
+      let size = variant.src.split('/vid/').pop().split('x')[0];
+      if (size > lastSize) largest = variant;
+      lastSize = size;
+    });
+    if (!!largest) {
+      console.log(`[IED] largest video url:`, largest.src);
+      pushPic(largest.src);
+      setDownloadIcon(tab, 'twitter', 'video', pics.length, pics.length);
+    }
+  }).catch(err => {
+    console.warn(`[IED] couldn't fetch twitter video`, err, typeof err);
+  });
+
+}
+function fetchInstagramPost(tab) {
+  const getParams = '__a=1&__d=dis';
+  const fetchUrl = tab.url + (tab.url.includes('?') ? '&' : '?') + getParams;
+  fetchWithTimeout(fetchUrl, { timeout: fetchTimeout }).then(data => {
     getCurrentTab((tabCurrent) => {
       if (tabCurrent?.url !== tab.url) {
         console.log('[IED] read json aborted because url changed');
         return;
       }
       console.log('[IED] read json success', JSON.stringify(data, null, 2));
-      // TODO FIXME read json got this: https://www.instagram.com/p/CdCRRjvBZS5/?__a=1
-      // read json success {
-      //   "message": "",
-      //   "spam": true,
-      //   "status": "fail"
-      // }
       if (!data.items) {
-        console.warn('[IED] read json got spam=true');
+        console.warn('[IED] read json got unexpected result!');
         return;
       }
       let imageVersions = data.items[0].image_versions2;
@@ -261,25 +311,32 @@ function detectGet(tab) {
             pics.push(imageUrl);
           }
         });
-        setDownloadIcon(tab, videoUrl ? 'video' : 'photo', pics.length, carouselMedia.length);
+        setDownloadIcon(tab, 'instagram', videoUrl ? 'video' : 'photo', pics.length, carouselMedia.length);
       } else if (videoVersions) {
         let videoUrl = videoVersions[0].url;
-        if (videoUrl && !pics.includes(videoUrl)) {
+        if (videoUrl && !pics.includes(videoUrl) && !pics.map((pic) => pic.split('?')[0]).includes(videoUrl.split('?')[0])) {
           pics.push(videoUrl);
-          setDownloadIcon(tab, 'video', pics.length, 1);
+          setDownloadIcon(tab, 'instagram', 'video', pics.length, 1);
         }
       } else if (imageVersions) {
         let imageUrl = imageVersions.candidates[0].url;
-        if (imageUrl && !pics.includes(imageUrl)) {
+        if (imageUrl && !pics.includes(imageUrl) && !pics.map((pic) => pic.split('?')[0]).includes(imageUrl.split('?')[0])) {
           pics.push(imageUrl);
-          setDownloadIcon(tab, 'photo', pics.length, 1);
+          setDownloadIcon(tab, 'instagram', 'photo', pics.length, 1);
         }
       }
     });
   }).catch(err => {
-    console.log('[IED] read json error', err, typeof err);
-    pics.length = 0;
-    detectDOM(tab);
+    // TODO FIXME read json got this: https://www.instagram.com/p/CdCRRjvBZS5/?__a=1
+    // read json success {
+    //   "message": "",
+    //   "spam": true,
+    //   "status": "fail"
+    // }
+    console.warn('[IED] read json error', err, typeof err);
+    setTimeout(() => {
+      detectDOM(tab, 'instagram');
+    }, 1000);
   });
 }
 
@@ -287,12 +344,12 @@ async function fetchWithTimeout(url, options = {}) {
   const { timeout = 8000 } = options;
   fetchController = new AbortController();
   const id = setTimeout(() => fetchController.abort(), timeout);
-  const response = await fetch(url, {
+  const responseJson = await fetch(url, {
     ...options,
     signal: fetchController.signal  
-  });
+  }).then(res => res.json());
   clearTimeout(id);
-  return response;
+  return responseJson;
 }
 
 function analyzeTab() {

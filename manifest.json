@@ -1,14 +1,16 @@
 {
   "manifest_version": 3,
-  "name": "Instagram Easy Download",
-  "version": "0.0.7",
-  "description": "1-Click to download all instagram photos and video HD.",
+  "name": "Social Media Easy Download",
+  "version": "0.0.1",
+  "description": "1-Click to download all photos and videos from Instagram & Twitter HD.",
   "author": "Taufik Nur Rahmanda",
   "permissions": [
     "scripting"
   ],
   "host_permissions": [
-    "https://*.instagram.com/*"
+    "https://*.instagram.com/*",
+    "https://twitter.com/*",
+    "https://cdn.syndication.twimg.com/*"
   ],
   "action": {
     "default_title": "Open a Instagram post to download its photos and video",
@@ -28,7 +30,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://*.instagram.com/*"],
+      "matches": ["https://*.instagram.com/*", "https://twitter.com/*"],
       "js": ["foreground.js"]
     }
   ]

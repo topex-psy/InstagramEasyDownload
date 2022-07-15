@@ -1,5 +1,6 @@
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
-  let { action, pics, next } = request;
+  let { action, next } = request;
+  console.log("[IED] got action:", action, next);
   
   switch (action) {
     case 'bulkDownload':
@@ -24,8 +25,28 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
       if (onNext) button.click(); else alert("Last post has been reached. Bulk download finished!");
       sendResponse({result: onNext});
       break;
+    case 'putDownloadButton':
+      sendResponse({result: 'ok'});
+      break;
     case 'detectPics':
-      let detect = [];
+      let photos = [];
+      let videos = [];
+      if (window.location.host == 'twitter.com') {
+        document.querySelectorAll('article a').forEach((a) => {
+          if (a.href.includes('/photo/')) {
+            let thumbSrc = a.querySelector('img').src;
+            let thumbSize = thumbSrc.split('name=').pop().split('&')[0];
+            photos.push(thumbSrc.replace(`name=${thumbSize}`,'name=large'));
+          }
+        });
+        document.querySelectorAll('article video').forEach((v) => {
+          videos.push(v.poster);
+        });
+        console.log("[IED] got photos:", photos);
+        console.log("[IED] got videos:", videos);
+        sendResponse({result: photos, videos: videos, total: photos.length});
+        break;
+      }
       let images = document.querySelectorAll('article[role="presentation"] div[role="presentation"] img[src]');
       if (!images.length) images = document.querySelectorAll('article[role="presentation"] img[srcset][src]');
       if (!images.length) images = [document.querySelector('article[role="presentation"] img[src]')];
@@ -33,9 +54,9 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         // if (img.hasAttribute('srcset')) {
         //   let srcset = img.getAttribute('srcset');
         //   let src = srcset.split(' ')[0];
-        //   detect.push(src);
+        //   photos.push(src);
         // } else {
-          if (!!img) detect.push(img.src);
+          if (!!img && !img.src.includes('_s150x150')) photos.push(img.src); // exclude ?stp=dst-jpg_s150x150
         // }
       });
 
@@ -45,34 +66,48 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
 
       let dotWrapper = btnNextPrev?.parentElement.parentElement.parentElement.nextElementSibling;
       let dotCount = dotWrapper?.childElementCount || 0;
-      
-      if (!next && !!!btnNext && pics.length < dotCount) next = true;
-      else if (next && !!!btnPrev && pics.length < dotCount) next = false;
-      let btnToPress = next ? btnPrev : btnNext;
+      let btnToPress = next ? btnNext : btnPrev;
+      // let dotActive = 0;
+      // for (let i = 0; i < dotCount; i++) {
+      //   if (dotWrapper.childNodes[i].classList.length > 1) {
+      //     dotActive = i;
+      //     break;
+      //   }
+      // }
 
-      let dotActive = 0;
-      for (let i = 0; i < dotCount; i++) {
-        if (dotWrapper.childNodes[i].classList.length > 1) {
-          dotActive = i;
-          break;
-        }
-      }
-      if (pics.length != dotCount) btnToPress?.click();
-      sendResponse({result: detect, total: dotCount ? dotCount : 1, next: next});
+      // console.log('[IED] pics.length', pics.length);
+      // console.log('[IED] dotCount', dotCount);
+      // console.log('[IED] next', next);
+      // console.log('[IED] btnToPress', btnToPress);
+      // console.log('[IED] canContinue', !!btnToPress);
+      // console.log('[IED] btnNext', btnNext);
+      // console.log('[IED] btnPrev', btnPrev);
+      // if (pics.length != dotCount) btnToPress?.click();
+      btnToPress?.click();
+      sendResponse({
+        result: photos,
+        total: dotCount ? dotCount : 1,
+        canContinue: !!btnToPress,
+      });
       break;
   }
 });
+
+function __IED_clickIcon() {
+  chrome.runtime?.sendMessage({action: 'clickIcon', url: window.location.href}, function(response) {
+    let error = chrome.runtime.lastError;
+    if (error) return console.warn('[IED] clickIcon error', error.message);
+    console.log('[IED] clickIcon response', response);
+  });
+}
 
 document.onkeydown = (e) => {
   if (e.key === "Escape") {
     // e.preventDefault();
     chrome.runtime?.sendMessage({action: 'escapeKey', url: window.location.href}, function(response) {
       let error = chrome.runtime.lastError;
-      if (error) {
-        console.log('[IED] escapeKey error', error.message);
-      } else {
-        console.log('[IED] escapeKey response', response);
-      }
+      if (error) return console.warn('[IED] escapeKey error', error.message);
+      console.log('[IED] escapeKey response', response);
     });
   }
 };
