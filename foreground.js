@@ -1,62 +1,3 @@
-const __IED_downloadButtonID = '__IED_downloadButton';
-const __IED_clickIcon = () => {
-  chrome.runtime?.sendMessage({action: 'clickIcon', url: window.location.href}, function(response) {
-    let error = chrome.runtime.lastError;
-    if (error) return console.warn('[IED] clickIcon error', error.message);
-    console.log('[IED] clickIcon response', response);
-    if (!response.ok) {
-      // TODO please click again
-    }
-  });
-}
-const __IED_injectCSS = () => {
-  var css = document.createElement("style");
-  css.innerHTML = `
-  #${__IED_downloadButtonID} {
-    display: flex;
-    align-items: center;
-    position: absolute;
-    top: .75rem;
-    right: .75rem;
-    border: 0;
-    border-radius: 2rem;
-    padding: 0.45rem 1rem;
-    font-weight: 600;
-    color: #fff;
-    background: linear-gradient(45deg, #42a661, #4bc3fd);
-    box-shadow: 2px 2px 6px -4px #000;
-    cursor: pointer;
-    opacity: 0;
-    transform: translateY(-1rem);
-    transition: all .2s ease;
-  }
-  #${__IED_downloadButtonID}.show {
-    transform: translateY(0);
-    opacity: 1;
-  }
-  #${__IED_downloadButtonID} img {
-    margin-right: 0.5rem;
-  }
-  #${__IED_downloadButtonID} span {
-    background: #00000045;
-    border-radius: 50%;
-    width: 1.5rem;
-    display: inline-block;
-    line-height: 1.5rem;
-    margin-left: 0.4rem;
-    margin-right: -0.5rem;
-  }
-  #${__IED_downloadButtonID}:hover {
-    filter: brightness(1.1);
-  }
-  #${__IED_downloadButtonID}:active {
-    filter: brightness(.95);
-    transform: scale(.95);
-  }`;
-  document.head.appendChild(css);
-}
-__IED_injectCSS();
-
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   let { action, next, category, type, picCount, iconURL } = request;
   console.log("[IED] got action:", action, next);
@@ -94,38 +35,62 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
       btn.id = __IED_downloadButtonID;
       btn.addEventListener('click', __IED_clickIcon);
       setTimeout(() => { // waiting for container element
-        let container = document.body;
         console.log("[IED] looking for container for download button:", category);
+        let findContainer = () => {
+          let container;
+          if (window.location.host.endsWith('facebook.com')) {
+            container = {
+              'video':
+                document.querySelector('div[data-pagelet="WatchPermalinkVideo"]') ||
+                document.querySelector('div#watch_feed>div>div>div>div>div>div:last-child') ||
+                document.querySelector('div[aria-label="Video Viewer"]>div:last-child>div>div>div:last-child>div>div>div>div:last-child>div>div:nth-child(2)') ||
+                document.querySelector('div[role="complementary"]>div>div>div>div>div>div:nth-child(2)') ||
+                document.querySelector('div[role="article"]>div>div>div>div>div>div:nth-child(2)>div>div:last-child>div>div>div>div'),
+              'story':
+                document.querySelector("div#viewer_dialog > div > div > div > div:nth-child(2) > div > div > div > div > div > div:nth-child(2) > div > div") ||
+                document.querySelector("div#viewer_dialog > div > div > div > div:nth-child(2) > div > div > div > div > div") ||
+                document.querySelector('div#viewer_dialog>div>div>div>div:last-child') ||
+                document.querySelector('div[data-pagelet="StoriesContentPane"]'),
+            }[category]?.parentNode;
+          } else if (window.location.host.endsWith('instagram.com')) {
+            container = category == 'photo'
+            ? document.querySelector('article[role="presentation"] div[role="presentation"]') ||
+              document.querySelector('article[role="presentation"]')
+            : document.querySelector('article[role="presentation"] > div > div') ||
+              document.querySelector('article[role="presentation"]');
+          } else {
+            container = document.querySelector('article div[id][aria-labelledby]') ||
+              document.querySelector('article');
+          }
+          return container || document.body;
+        };
+        let putButton = (btn) => {
+          let container = findContainer();
+          let prevButton = document.getElementById(__IED_downloadButtonID);
+          prevButton?.remove();
+          container.appendChild(btn);
+          container.addEventListener('mouseenter', () => btn.classList.add('show'));
+          container.addEventListener('mouseleave', () => btn.classList.remove('show'));
+        };
+
         if (window.location.host.endsWith('facebook.com')) {
-          container = {
-            'video':
-              document.querySelector('div[data-pagelet="WatchPermalinkVideo"]') ||
-              document.querySelector('div#watch_feed>div>div>div>div>div>div:last-child') ||
-              document.querySelector('div[aria-label="Video Viewer"]>div:last-child>div>div>div:last-child>div>div>div>div:last-child>div>div:nth-child(2)') ||
-              document.querySelector('div[role="complementary"]>div>div>div>div>div>div:nth-child(2)') ||
-              document.querySelector('div[role="article"]>div>div>div>div>div>div:nth-child(2)>div>div:last-child>div>div>div>div'),
-            'story':
-              document.querySelector('div[data-pagelet="StoriesContentPane"]') ||
-              document.querySelector('div#viewer_dialog>div>div>div>div:last-child') ||
-              document.querySelector("div#viewer_dialog > div > div > div > div:nth-child(2) > div > div > div > div > div"),
-          }[category]?.parentNode;
-        } else if (window.location.host.endsWith('instagram.com')) {
-          container = category == 'photo'
-          ? document.querySelector('article[role="presentation"] div[role="presentation"]') ||
-            document.querySelector('article[role="presentation"]')
-          : document.querySelector('article[role="presentation"] > div > div') ||
-            document.querySelector('article[role="presentation"]');
-        } else {
-          container = document.querySelector('article div[id][aria-labelledby]') ||
-            document.querySelector('article');
+          __IED_observeDOM(document.body, function(m) {
+            let addedNodes = [];
+            let removedNodes = [];
+            m.forEach(record => record.addedNodes.length & addedNodes.push(...record.addedNodes));
+            m.forEach(record => record.removedNodes.length & removedNodes.push(...record.removedNodes));
+            console.log('[FED] DOM HAS CHANGED!\nAdded:', addedNodes, '\nRemoved:', removedNodes);
+            let btnDownload = document.getElementById(__IED_downloadButtonID);
+            console.info('btnDownload exist:', !!btnDownload);
+            if (btnDownload) {
+              __IED_lastDownloadButton = btnDownload;
+            } else {
+              putButton(__IED_lastDownloadButton);
+            }
+          });
         }
 
-        let prevButton = document.getElementById(__IED_downloadButtonID);
-        prevButton?.remove();
-        container = container || document.body;
-        container.appendChild(btn);
-        container.addEventListener('mouseenter', () => btn.classList.add('show'));
-        container.addEventListener('mouseleave', () => btn.classList.remove('show'));
+        putButton(btn);
       }, 1000);
       sendResponse({result: 'ok'});
       break;
@@ -321,3 +286,84 @@ document.onkeydown = (e) => {
     });
   }
 };
+
+var __IED_lastDownloadButton;
+const __IED_downloadButtonID = '__IED_downloadButton';
+const __IED_clickIcon = () => {
+  chrome.runtime?.sendMessage({action: 'clickIcon', url: window.location.href}, function(response) {
+    let error = chrome.runtime.lastError;
+    if (error) return console.warn('[IED] clickIcon error', error.message);
+    console.log('[IED] clickIcon response', response);
+    if (!response.ok) {
+      let btnDownload = document.getElementById(__IED_downloadButtonID);
+      btnDownload.classList.add('error');
+      setTimeout(() => {
+        btnDownload.classList.remove('error');
+      }, 200);
+    }
+  });
+}
+const __IED_observeDOM = (function() {
+  var MutationObserver = window.MutationObserver || window.WebKitMutationObserver;
+  return function(obj, callback) {
+    if (!obj || obj.nodeType !== 1) return; 
+    if (MutationObserver) {
+      var mutationObserver = new MutationObserver(callback)
+      mutationObserver.observe( obj, { childList:true, subtree:true })
+      return mutationObserver
+    } else if (window.addEventListener) {
+      obj.addEventListener('DOMNodeInserted', callback, false)
+      obj.addEventListener('DOMNodeRemoved', callback, false)
+    }
+  }
+})()
+const __IED_injectCSS = () => {
+  var css = document.createElement("style");
+  css.innerHTML = `
+  #${__IED_downloadButtonID} {
+    display: flex;
+    align-items: center;
+    position: absolute;
+    top: .75rem;
+    right: .75rem;
+    border: 0;
+    border-radius: 2rem;
+    padding: 0.45rem 1rem;
+    font-weight: 600;
+    color: #fff;
+    background: linear-gradient(45deg, #42a661, #4bc3fd);
+    box-shadow: 2px 2px 6px -4px #000;
+    cursor: pointer;
+    opacity: 0;
+    transform: translateY(-1rem);
+    transition: all .2s ease;
+  }
+  #${__IED_downloadButtonID}.show {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  #${__IED_downloadButtonID}.error {
+    filter: blur(2px);
+  }
+  #${__IED_downloadButtonID} img {
+    margin-right: 0.5rem;
+  }
+  #${__IED_downloadButtonID} span {
+    background: #00000045;
+    border-radius: 50%;
+    width: 1.5rem;
+    display: inline-block;
+    line-height: 1.5rem;
+    margin-left: 0.4rem;
+    margin-right: -0.5rem;
+  }
+  #${__IED_downloadButtonID}:hover {
+    filter: brightness(1.1);
+  }
+  #${__IED_downloadButtonID}:active {
+    filter: brightness(.95);
+    transform: scale(.95);
+  }`;
+  document.head.appendChild(css);
+}
+__IED_injectCSS();

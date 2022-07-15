@@ -239,12 +239,7 @@ function setDownloadIcon(tab, site, category, type, picCount, picTotal) {
     console.log("[IED] detection completed!");
 
     // put download button in foreground
-    let iconURL = chrome.runtime.getURL("/icons/icon24.png");
-    chrome.tabs.sendMessage(tab.id, { action: 'putDownloadButton', category, type, picCount, iconURL }, function(response) {
-      let error = chrome.runtime.lastError;
-      if (error) return console.log(`[IED] putDownloadButton ${site} error:`, error.message);
-      console.log(`[IED] putDownloadButton ${site} result:`, response?.result);
-    });
+    putDownloadButton(tab.id, category, type, picCount);
 
     if (bulkDownload == tab.id) {
       onIconClick();
@@ -258,6 +253,15 @@ function setDownloadIcon(tab, site, category, type, picCount, picTotal) {
       });
     }
   }
+}
+
+function putDownloadButton(tabID, category, type, picCount) {
+  let iconURL = chrome.runtime.getURL("/icons/icon24.png");
+  chrome.tabs.sendMessage(tabID, { action: 'putDownloadButton', category, type, picCount, iconURL }, function(response) {
+    let error = chrome.runtime.lastError;
+    if (error) return console.log(`[IED] putDownloadButton ${site} error:`, error.message);
+    console.log(`[IED] putDownloadButton ${site} result:`, response?.result);
+  });
 }
 
 function detectDOM(tab, site, category = 'post', next = true) {
