@@ -31,14 +31,27 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://*.facebook.com/*", "https://*.instagram.com/*", "https://twitter.com/*"],
+      "matches": [
+        "https://*.facebook.com/*",
+        "https://*.instagram.com/*",
+        "https://twitter.com/*"
+      ],
       "js": ["foreground.js"]
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": [ "icons/icon24.png", "icons/icon32.png" ],
-      "matches": ["https://*.facebook.com/*", "https://*.instagram.com/*", "https://twitter.com/*"]
+      "resources": [
+        "icons/icon24.png",
+        "icons/facebook_download16.png",
+        "icons/instagram_download16.png",
+        "icons/twitter_download16.png"
+      ],
+      "matches": [
+        "https://*.facebook.com/*",
+        "https://*.instagram.com/*",
+        "https://twitter.com/*"
+      ]
     }
   ]
 }
