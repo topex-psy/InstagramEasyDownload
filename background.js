@@ -5,7 +5,6 @@ var bulkDownload;
 var currentTab;
 var fetchController;
 var inFocus = true;
-var reanalyze = false; // TODO unused
 
 const fetchTimeout = 3000;
 
@@ -15,10 +14,6 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   let { action, url } = request;
   let response = {ok: true};
   switch (action) {
-    case 'reanalyze':
-      reanalyze = true;
-      analyzeTab();
-      break;
     case 'clickIcon':
       response.ok = onIconClick();
       break;
@@ -57,7 +52,6 @@ function isURLFacebook(url) {
 function isURLFacebookVideo(url) {
   return isURLFacebook(url) && (
     url.includes('/videos/') ||
-    // url.includes('/watch/?') ||
     url.includes('/watch/') ||
     url.includes('/watch?') ||
     url.includes('/permalink.php?story_fbid=') ||
@@ -66,6 +60,7 @@ function isURLFacebookVideo(url) {
 }
 function isURLFacebookPhoto(url) {
   return isURLFacebook(url) && (
+    url.includes('/photo/?') ||
     url.includes('/posts/')
   );
 }
@@ -119,7 +114,7 @@ function onIconClick() {
     return false;
   }
   const { url } = currentTab;
-  const isFacebookPost = isURLFacebookVideo(url) || isURLFacebookStory(url);
+  const isFacebookPost = isURLFacebookVideo(url) || isURLFacebookStory(url) || isURLFacebookPhoto(url);
   const isTwitterPost = isURLTwitterPost(url);
   const isInstagramPost = isURLInstagramPost(url);
   const isInstagram = isURLInstagram(url);
@@ -177,7 +172,8 @@ function analyze(tab) {
   const isFacebook = isURLFacebook(url);
   const isFacebookVideo = isURLFacebookVideo(url);
   const isFacebookStory = isURLFacebookStory(url);
-  const isFacebookPost = isFacebookVideo || isFacebookStory;
+  const isFacebookPhoto = isURLFacebookPhoto(url);
+  const isFacebookPost = isFacebookVideo || isFacebookStory || isFacebookPhoto;
   const isInstagram = isURLInstagram(url);
   const isInstagramPost = isURLInstagramPost(url);
   const isTwitter = isURLTwitter(url);
@@ -192,9 +188,7 @@ function analyze(tab) {
   console.log("[IED] tab is twitter", isTwitter);
   console.log("[IED] tab is twitter post", isTwitterPost);
 
-  if (currentTab?.id != tab.id) reanalyze = false;
   currentTab = tab;
-
   pics.length = 0;
   vids.length = 0;
 
@@ -223,7 +217,7 @@ function analyze(tab) {
   console.log("[IED] load tab complete");
 
   if (isFacebookPost) {
-    detectMedia(tab, site, isFacebookVideo ? 'video' : 'story');
+    detectMedia(tab, site, isFacebookVideo ? 'video' : isFacebookStory ? 'story' : 'photo');
     chrome.action.setTitle({title: 'Counting Facebook photos and videos ...', tabId});
     chrome.action.setBadgeText({'text': ''});
     generateIcons(tabId, site, '_counting');
@@ -285,19 +279,16 @@ function setDownloadIcon(tab, site, category, picTotal) {
 function putDownloadButton(tab, site, category, type, picCount, observeDOM = true, retry = 0) {
   // let iconURL = chrome.runtime.getURL("/icons/icon24.png");
   let iconURL = chrome.runtime.getURL(`/icons/${site}_download16.png`);
-  chrome.tabs.sendMessage(tab.id, { action: 'putDownloadButton', category, type, picCount, iconURL, observeDOM, reanalyze }, function(response) {
+  chrome.tabs.sendMessage(tab.id, { action: 'putDownloadButton', category, type, picCount, iconURL, observeDOM }, function(response) {
     let error = chrome.runtime.lastError;
     if (error) return console.log(`[IED] putDownloadButton ${site} error:`, error.message);
     console.log(`[IED] putDownloadButton ${site} result:`, response);
-    // reanalyze = false;
     if (response?.container == 'body') { // container not found yet
       if (retry < 10) { // max retry is 10 seconds
         setTimeout(() => { // wait another second for right container to be found
           putDownloadButton(tab, site, category, type, picCount, !response.isObserved, retry + 1);
         }, 1000);
       }
-    } else { // reanalyze once more
-      // analyze(tab);
     }
   });
 }
@@ -321,7 +312,7 @@ function detectMedia(tab, site, category = 'post', next = true) {
     let detectionCount = pics.length + vids.length;
     setDownloadIcon(tab, site, category, picTotal);
     if (site != 'facebook' && (!picTotal || detectionCount < picTotal)) { // detection is ongoing
-      console.log(`[IED] counting media on ${site} progress: ${detectionCount}/${picTotal}`);
+      console.log(`[IED] counting ${category} on ${site} progress: ${detectionCount}/${picTotal}`);
       detectMedia(tab, site, category, response.canContinue ? next : !next);
     } else if (site == 'twitter' && videos.length) { // fetch twitter videos
       fetchTwitterVideo(tab);

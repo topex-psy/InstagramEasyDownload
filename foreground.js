@@ -1,5 +1,5 @@
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
-  let { action, next, category, type, picCount, iconURL, observeDOM, reanalyze } = request;
+  let { action, next, category, type, picCount, iconURL, observeDOM } = request;
   console.log("[IED] got action:", action, request);
 
   // let host = window.location.host.split('.').slice(-2).join('.');
@@ -36,6 +36,12 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         let container;
         if (site == 'facebook') {
           switch (category) {
+            case 'photo':
+              containers = [
+                // https://www.facebook.com/photo/?fbid=5208951275826389&set=a.525094930878737
+                document.querySelector('div[role="main"] img')?.parentElement,
+              ];
+              break;
             case 'video':
               let watchFeeds = document.querySelectorAll("#watch_feed");
               let watchFeed = watchFeeds[watchFeeds.length - 1];
@@ -48,6 +54,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                 watchFeed?.parentElement.querySelector(`#watch_feed>div>div>div>div>div:first-child`),
 
                 // https://www.facebook.com/permalink.php?story_fbid=997830417807855&id=100027427190759
+                // https://www.facebook.com/aespadaily/posts/pfbid033A2Puf6yJoLjWBvaTdRcfukxg2ZHJSGbu37G7iig85oQkqdA4YSSEespds98qQvCl
                 document.querySelector(`div[role="article"][aria-posinset="${posinset}"]>div>div>div>div>div>div:nth-child(2)>div>div:nth-child(3)>div:nth-child(2)>div>div>div`),
     
                 // https://www.facebook.com/Eirene.Vidiarama/posts/pfbid02ys8EmPpvWrHFDZHHCArEgsKPWNvuGR7eKcZgH1CXCPjQbaoZjJKGdPZPQTSb5g15l
@@ -101,19 +108,6 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
           console.log("[IED] container has yet to be found, waiting ...");
         } else {
           console.info("[IED] container found maybe:", container);
-
-          // TODO check maybe it's a multiple photos post
-          // https://www.facebook.com/aespadaily/posts/pfbid0CZkRHbg1PjEMPUFwjHJUS373ciXquY51cqokuW6k3uSrYD8YP9ujZN6MfAmiarEVl
-          // let checkPhotos = container.querySelectorAll('a[href*="/photos/"]');
-          // console.log("[IED] maybe it's a multiple photos post", i, checkPhotos);
-          // if (!reanalyze && checkPhotos.length) {
-          //   chrome.runtime?.sendMessage({action: 'reanalyze', url: window.location.href}, function(response) {
-          //     let error = chrome.runtime.lastError;
-          //     if (error) return console.log('[IED] reanalyze error', error.message);
-          //     console.log('[IED] reanalyze response', response);
-          //   });
-          // }
-
         }
         return container;
       };
@@ -143,6 +137,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
           container.addEventListener('mouseenter', () => btn.classList.add('show'));
           container.addEventListener('mouseleave', () => btn.classList.remove('show'));
           feedContainer = container;
+          __IED_previousHref = window.location.href;
 
           if (observeDOM && site == 'facebook') { // only observe facebook for now
             __IED_observeDOM(document.body, function(m) {
@@ -151,8 +146,11 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
               m.forEach(record => record.addedNodes.length & addedNodes.push(...record.addedNodes));
               m.forEach(record => record.removedNodes.length & removedNodes.push(...record.removedNodes));
               let btnDownload = document.getElementById(__IED_downloadButtonID);
-              if (!btnDownload) {
-                console.info('[FED] dom has changed and removed our button, here we go again ...\nAdded:', addedNodes, '\nRemoved:', removedNodes);
+              if (window.location.href != __IED_previousHref) {
+                console.info('[FED] URL has changed and removed our button, here we go again ...\nAdded:', addedNodes, '\nRemoved:', removedNodes);
+                // TODO reanalyze
+              } else if (!btnDownload) {
+                console.info('[FED] DOM has changed and removed our button, here we go again ...\nAdded:', addedNodes, '\nRemoved:', removedNodes);
                 putButton();
               }
             });
@@ -182,6 +180,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
           // get page source
           let source = new XMLSerializer().serializeToString(document.body);
           console.info("[FED] source OK!", category);
+          console.log('[FED] source:', source);
           let fixURL = (url) => url?.replaceAll('&amp;', '&').replaceAll('\\','');
           let strIndexes = (find) => {
             if (!source) return [];
@@ -192,23 +191,6 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
             }
             return result;
           };
-          // let extractString = (index, opening = '"', closing = '"') => {
-          //   let findOpening = '';
-          //   // let findClosing = '';
-          //   let openingIndex = index;
-          //   // let closingIndex = index;
-          //   while (findOpening != opening && openingIndex > 0) {
-          //     openingIndex--;
-          //     findOpening = source[openingIndex];
-          //   }
-          //   // while (findClosing != closing && closingIndex < source.length - 1) {
-          //   //   closingIndex++;
-          //   //   findClosing = source[closingIndex];
-          //   // }
-          //   // let text = source.substring(openingIndex + 1, closingIndex);
-          //   let text = source.substring(openingIndex + 1).split(closing)[0];
-          //   return text;
-          // };
           
           switch (category) {
             case 'story': {
@@ -258,39 +240,15 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
             }
             break;
             default: {
-              // detect multiple photos
-              // var checkPhotos = document.body.querySelectorAll('a[href*="/photos/"] img[src]');
-              // console.log("[IED] checkPhotos ...", checkPhotos);
-              // for (let i = 0; i < checkPhotos.length; i++) {
-              //   let src = checkPhotos[i].src;
-              //   let name = src.split('?')[0].split('/').pop();
-              //   console.log("[IED] LOL, we find photo", i, name, src);
-              //   photos.push({
-              //     hd: fixURL(src),
-              //     sd: fixURL(src),
-              //   });
-
-              //   // extract photo URLs from source
-              //   let findPhotoURLs = strIndexes(name);
-              //   let photoURLs = findPhotoURLs.map((i) => fixURL(extractString(i)));
-              //   console.log("[IED] FINALLY we got photo urls", photoURLs);
-              //   // photoURLs.forEach((url) => {
-              //   //   photos.push({
-              //   //     hd: url,
-              //   //     sd: url,
-              //   //   });
-              //   // });
-              // }
-
               let titlePrefix = `"color_ranges":[],"text":"`;
               let title = source.substring(source.indexOf(titlePrefix) + titlePrefix.length).split('"')[0];
               let findIndexes = [
                 ...strIndexes('"playable_url":'),
+                ...strIndexes('"viewer_image":'),
                 ...strIndexes('"image":'),
               ];
-              // console.info("[FED] findIndexes", findIndexes);
               if (!findIndexes.length) {
-                console.log("[FED] not finding any playable_url!");
+                console.log("[FED] can't find any media url!");
                 break;
               }
               for (let h = 0; h < findIndexes.length; h++) {
@@ -301,7 +259,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                 let findEnd = '';
                 let findEndIndex = findFrom;
                 let findStartRemaining = 1;
-                // TODO infinite loop: https://www.facebook.com/TopEx.Divine/posts/pfbid037omp11fCY8nS1Sp6izxRemKi5RHSMXpfqQCrLAijRdGwcvRF2cjX8NDmR18mfMsJl?notif_id=1657931896809022&notif_t=feedback_reaction_generic&ref=notif
+                // TODO FIXME infinite loop: https://www.facebook.com/TopEx.Divine/posts/pfbid037omp11fCY8nS1Sp6izxRemKi5RHSMXpfqQCrLAijRdGwcvRF2cjX8NDmR18mfMsJl?notif_id=1657931896809022&notif_t=feedback_reaction_generic&ref=notif
                 while (findStart != '{' || findStartRemaining > 0) {
                   findStartIndex--;
                   findStart = source[findStartIndex];
@@ -316,9 +274,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                   else if (findEnd == '}') findEndRemaining--;
                 }
                 let text = source.substring(findStartIndex, findEndIndex + 1);
-                console.log('[FED] getPageSource SUCCESS!');
                 // console.log('[FED] getPageSource title:', title);
-                // console.log('[FED] getPageSource source:', source);
                 // console.log('[FED] getPageSource text:', text);
                 let media;
                 try {
@@ -330,6 +286,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                   break;
                 }
                 if (media.playable_url) {
+                  if (videos.find((vid) => vid.id && vid.id == media.id)) continue;
                   let data = {
                     id: media.id,
                     height: media.original_height,
@@ -346,14 +303,24 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                   console.log("[IED] GOT A VIDEO MEDIA", media, JSON.stringify(data, null, 2));
                   videos.push(data);
                 } else {
+                  if (photos.find((pic) => pic.id && pic.id == media.id)) continue;
                   let owner = document.title.split(' - ')[0];
+                  let possibleImages = [media.viewer_image, media.photo_image, media.image];
+                  console.log("[IED] possibleImages", possibleImages);
+                  let findLargest = possibleImages
+                    .filter((pic) => pic?.uri)
+                    .sort((a,b) => a.width > b.width ? -1 : a.width < b.width ? 1 : 0);
+                  console.log("[IED] findLargest", findLargest);
+                  if (!findLargest.length) continue;
+                  let largest = findLargest[0];
+                  let medium = findLargest.length > 1 ? findLargest[1] : largest;
                   let data = {
                     id: media.id,
-                    height: media.viewer_image?.height,
-                    width: media.viewer_image?.width,
-                    hd: fixURL(media.viewer_image?.uri || media.image.uri),
-                    sd: fixURL(media.image.uri),
-                    thumbnail: fixURL(media.image.uri),
+                    width: largest.width,
+                    height: largest.height,
+                    hd: fixURL(largest.uri),
+                    sd: fixURL(medium.uri),
+                    thumbnail: fixURL(medium.uri),
                     title: `${owner}'s Photo`,
                   };
                   console.log("[IED] GOT A PHOTO MEDIA", media, JSON.stringify(data, null, 2));
@@ -445,6 +412,7 @@ document.onkeydown = (e) => {
   }
 };
 
+var __IED_previousHref;
 const __IED_downloadButtonID = '__IED_downloadButton';
 const __IED_clickIcon = () => {
   chrome.runtime?.sendMessage({action: 'clickIcon', url: window.location.href}, function(response) {
