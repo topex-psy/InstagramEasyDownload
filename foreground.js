@@ -44,6 +44,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                 // https://www.facebook.com/watch/?ref=saved&v=1005070703497461
                 // https://www.facebook.com/watch/?ref=saved&v=434556038532388
                 // https://www.facebook.com/watch?v=815373882747287
+                // https://www.facebook.com/winterkimenthusiast/videos/563108265457091
                 watchFeed?.parentElement.querySelector("#watch_feed>div>div>div>div>div:first-child"),
     
                 // https://www.facebook.com/permalink.php?story_fbid=997830417807855&id=100027427190759
@@ -174,8 +175,8 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
           // get page source
           let source = new XMLSerializer().serializeToString(document.body);
           console.info("[FED] source OK!", category);
-          let fixURL = (url) => url?.replaceAll('&amp;', '&');
-          let strIndexes = (source, find) => {
+          let fixURL = (url) => url?.replaceAll('&amp;', '&').replaceAll('\\','');
+          let strIndexes = (find) => {
             if (!source) return [];
             if (!find) return source.split('').map(function(_, i) { return i; });
             var result = [];
@@ -183,25 +184,23 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
               if (source.substring(i, i + find.length) == find) result.push(i);
             }
             return result;
-          }
-
-          // detect multiple photos
-          var checkPhotos = document.body.querySelectorAll('a[href*="/photos/"] img[src]');
-          console.log("[IED] checkPhotos ...", checkPhotos);
-          for (let i = 0; i < checkPhotos.length; i++) {
-            let src = checkPhotos[i].src;
-            let name = src.split('?')[0].split('/').pop();
-            console.log("\n[IED] LOL, we find photo", i, name, src);
-            photos.push({
-              // id: media.id,
-              // height: media.image.height,
-              // width: media.image.width,
-              hd: fixURL(src),
-              sd: fixURL(src),
-              // thumbnail: fixURL(media.previewImage.uri),
-              // title: `${owner}'s Photo Story ${new Date().toISOString().substring(0, 10)}`,
-            });
-          }
+          };
+          let extractString = (index, opening = '"', closing = '"') => {
+            let findOpening = '';
+            let findClosing = '';
+            let openingIndex = index;
+            let closingIndex = index;
+            while (findOpening != opening && openingIndex > 0) {
+              openingIndex--;
+              findOpening = source[openingIndex];
+            }
+            while (findClosing != closing && closingIndex < source.length - 1) {
+              closingIndex++;
+              findClosing = source[closingIndex];
+            }
+            let text = source.substring(openingIndex + 1, closingIndex);
+            return text;
+          };
           
           switch (category) {
             case 'story': {
@@ -247,9 +246,33 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
             }
             break;
             default: {
+              // detect multiple photos
+              var checkPhotos = document.body.querySelectorAll('a[href*="/photos/"] img[src]');
+              console.log("[IED] checkPhotos ...", checkPhotos);
+              for (let i = 0; i < checkPhotos.length; i++) {
+                let src = checkPhotos[i].src;
+                let name = src.split('?')[0].split('/').pop();
+                console.log("[IED] LOL, we find photo", i, name, src);
+                photos.push({
+                  hd: fixURL(src),
+                  sd: fixURL(src),
+                });
+
+                // extract photo URLs from source
+                // let findPhotoURLs = strIndexes(name);
+                // let photoURLs = findPhotoURLs.map((i) => fixURL(extractString(i)));
+                // console.log("[IED] FINALLY we got photo urls", photoURLs);
+                // photoURLs.forEach((url) => {
+                //   photos.push({
+                //     hd: url,
+                //     sd: url,
+                //   });
+                // });
+              }
+
               let titlePrefix = `"color_ranges":[],"text":"`;
               let title = source.substring(source.indexOf(titlePrefix) + titlePrefix.length).split('"')[0];
-              let findIndexes = strIndexes(source, '"playable_url":');
+              let findIndexes = strIndexes('"playable_url":');
               // console.info("[FED] findIndexes", findIndexes);
               if (!findIndexes.length) {
                 console.log("[FED] not finding any playable_url!");

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Social Media Easy Download",
   "version": "0.0.1",
-  "description": "1-Click to download all photos and videos from Instagram & Twitter HD.",
+  "description": "1-Click to download all photo and videos from Facebook, Instagram & Twitter HD.",
   "author": "Taufik Nur Rahmanda",
   "permissions": [
     "scripting"
@@ -14,7 +14,7 @@
     "https://cdn.syndication.twimg.com/*"
   ],
   "action": {
-    "default_title": "Open a Instagram post to download its photos and video",
+    "default_title": "Open a Facebook, Instagram, or Twitter post to download its photo and videos",
     "default_icon": {
       "16": "icons/icon16.png",
       "24": "icons/icon24.png",
