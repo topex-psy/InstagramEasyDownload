@@ -5,7 +5,7 @@ var bulkDownload;
 var currentTab;
 var fetchController;
 var inFocus = true;
-var reanalyze = false;
+var reanalyze = false; // TODO unused
 
 const fetchTimeout = 3000;
 

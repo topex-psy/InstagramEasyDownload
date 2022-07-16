@@ -100,15 +100,15 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
 
           // TODO check maybe it's a multiple photos post
           // https://www.facebook.com/aespadaily/posts/pfbid0CZkRHbg1PjEMPUFwjHJUS373ciXquY51cqokuW6k3uSrYD8YP9ujZN6MfAmiarEVl
-          let checkPhotos = container.querySelectorAll('a[href*="/photos/"]');
-          console.log("[IED] maybe it's a multiple photos post", i, checkPhotos);
-          if (!reanalyze && checkPhotos.length) {
-            chrome.runtime?.sendMessage({action: 'reanalyze', url: window.location.href}, function(response) {
-              let error = chrome.runtime.lastError;
-              if (error) return console.log('[IED] reanalyze error', error.message);
-              console.log('[IED] reanalyze response', response);
-            });
-          }
+          // let checkPhotos = container.querySelectorAll('a[href*="/photos/"]');
+          // console.log("[IED] maybe it's a multiple photos post", i, checkPhotos);
+          // if (!reanalyze && checkPhotos.length) {
+          //   chrome.runtime?.sendMessage({action: 'reanalyze', url: window.location.href}, function(response) {
+          //     let error = chrome.runtime.lastError;
+          //     if (error) return console.log('[IED] reanalyze error', error.message);
+          //     console.log('[IED] reanalyze response', response);
+          //   });
+          // }
 
         }
         return container;
@@ -185,22 +185,23 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
             }
             return result;
           };
-          let extractString = (index, opening = '"', closing = '"') => {
-            let findOpening = '';
-            let findClosing = '';
-            let openingIndex = index;
-            let closingIndex = index;
-            while (findOpening != opening && openingIndex > 0) {
-              openingIndex--;
-              findOpening = source[openingIndex];
-            }
-            while (findClosing != closing && closingIndex < source.length - 1) {
-              closingIndex++;
-              findClosing = source[closingIndex];
-            }
-            let text = source.substring(openingIndex + 1, closingIndex);
-            return text;
-          };
+          // let extractString = (index, opening = '"', closing = '"') => {
+          //   let findOpening = '';
+          //   // let findClosing = '';
+          //   let openingIndex = index;
+          //   // let closingIndex = index;
+          //   while (findOpening != opening && openingIndex > 0) {
+          //     openingIndex--;
+          //     findOpening = source[openingIndex];
+          //   }
+          //   // while (findClosing != closing && closingIndex < source.length - 1) {
+          //   //   closingIndex++;
+          //   //   findClosing = source[closingIndex];
+          //   // }
+          //   // let text = source.substring(openingIndex + 1, closingIndex);
+          //   let text = source.substring(openingIndex + 1).split(closing)[0];
+          //   return text;
+          // };
           
           switch (category) {
             case 'story': {
@@ -218,9 +219,8 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                 let { attachments } = edges[h].node;
                 for (let i = 0; i < attachments.length; i++) {
                   let { media } = attachments[i];
-                  console.log('[FED] found media', media);
-                  if (media.playable_url) { // story video
-                    videos.push({
+                  if (media.playable_url) {
+                    let data = {
                       id: media.id,
                       height: media.original_height,
                       width: media.original_width,
@@ -229,9 +229,11 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                       sd: fixURL(media.playable_url),
                       thumbnail: fixURL(media.preferred_thumbnail?.image.uri),
                       title: `${owner}'s Video Story ${new Date().toISOString().substring(0, 10)}`,
-                    });
-                  } else { // story photo
-                    photos.push({
+                    };
+                    console.log("[IED] GOT A VIDEO STORY", media, JSON.stringify(data, null, 2));
+                    videos.push(data);
+                  } else {
+                    let data = {
                       id: media.id,
                       height: media.image.height,
                       width: media.image.width,
@@ -239,7 +241,9 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                       sd: fixURL(media.previewImage.uri),
                       thumbnail: fixURL(media.previewImage.uri),
                       title: `${owner}'s Photo Story ${new Date().toISOString().substring(0, 10)}`,
-                    });
+                    };
+                    console.log("[IED] GOT A PHOTO STORY", media, JSON.stringify(data, null, 2));
+                    photos.push(data);
                   }
                 }
               }
@@ -247,40 +251,43 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
             break;
             default: {
               // detect multiple photos
-              var checkPhotos = document.body.querySelectorAll('a[href*="/photos/"] img[src]');
-              console.log("[IED] checkPhotos ...", checkPhotos);
-              for (let i = 0; i < checkPhotos.length; i++) {
-                let src = checkPhotos[i].src;
-                let name = src.split('?')[0].split('/').pop();
-                console.log("[IED] LOL, we find photo", i, name, src);
-                photos.push({
-                  hd: fixURL(src),
-                  sd: fixURL(src),
-                });
+              // var checkPhotos = document.body.querySelectorAll('a[href*="/photos/"] img[src]');
+              // console.log("[IED] checkPhotos ...", checkPhotos);
+              // for (let i = 0; i < checkPhotos.length; i++) {
+              //   let src = checkPhotos[i].src;
+              //   let name = src.split('?')[0].split('/').pop();
+              //   console.log("[IED] LOL, we find photo", i, name, src);
+              //   photos.push({
+              //     hd: fixURL(src),
+              //     sd: fixURL(src),
+              //   });
 
-                // extract photo URLs from source
-                // let findPhotoURLs = strIndexes(name);
-                // let photoURLs = findPhotoURLs.map((i) => fixURL(extractString(i)));
-                // console.log("[IED] FINALLY we got photo urls", photoURLs);
-                // photoURLs.forEach((url) => {
-                //   photos.push({
-                //     hd: url,
-                //     sd: url,
-                //   });
-                // });
-              }
+              //   // extract photo URLs from source
+              //   let findPhotoURLs = strIndexes(name);
+              //   let photoURLs = findPhotoURLs.map((i) => fixURL(extractString(i)));
+              //   console.log("[IED] FINALLY we got photo urls", photoURLs);
+              //   // photoURLs.forEach((url) => {
+              //   //   photos.push({
+              //   //     hd: url,
+              //   //     sd: url,
+              //   //   });
+              //   // });
+              // }
 
               let titlePrefix = `"color_ranges":[],"text":"`;
               let title = source.substring(source.indexOf(titlePrefix) + titlePrefix.length).split('"')[0];
-              let findIndexes = strIndexes('"playable_url":');
+              let findIndexes = [
+                ...strIndexes('"playable_url":'),
+                ...strIndexes('"image":'),
+              ];
               // console.info("[FED] findIndexes", findIndexes);
               if (!findIndexes.length) {
                 console.log("[FED] not finding any playable_url!");
                 break;
               }
-              // for (let h = 0; h < findIndexes.length; h++) {
-              //   let findFrom = findIndexes[h];
-                let findFrom = findIndexes[0];
+              for (let h = 0; h < findIndexes.length; h++) {
+                let findFrom = findIndexes[h];
+                // let findFrom = findIndexes[0];
                 let findStart = '';
                 let findStartIndex = findFrom;
                 let findEnd = '';
@@ -301,9 +308,9 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                   else if (findEnd == '}') findEndRemaining--;
                 }
                 let text = source.substring(findStartIndex, findEndIndex + 1);
-                console.log('[FED] getPageSource video SUCCESS!');
-                console.log('[FED] getPageSource video title:', title);
-                console.log('[FED] getPageSource source:', source);
+                console.log('[FED] getPageSource SUCCESS!');
+                // console.log('[FED] getPageSource title:', title);
+                // console.log('[FED] getPageSource source:', source);
                 // console.log('[FED] getPageSource text:', text);
                 let media;
                 try {
@@ -314,19 +321,37 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                   console.error('[FED] json malformatted', e);
                   break;
                 }
-                console.log('[FED] getPageSource video hd:', fixURL(media.playable_url_quality_hd));
-                videos.push({
-                  id: media.id,
-                  height: media.original_height,
-                  width: media.original_width,
-                  url: media.permalink_url,
-                  duration: media.playable_duration_in_ms,
-                  sd: fixURL(media.playable_url),
-                  hd: fixURL(media.playable_url_quality_hd),
-                  thumbnail: fixURL(media.preferred_thumbnail?.image.uri),
-                  title,
-                });
-              // }
+                if (media.playable_url) {
+                  let data = {
+                    id: media.id,
+                    height: media.original_height,
+                    width: media.original_width,
+                    url: media.permalink_url,
+                    duration: media.playable_duration_in_ms,
+                    sd: fixURL(media.playable_url),
+                    hd: fixURL(media.playable_url_quality_hd),
+                    thumbnail: fixURL(media.preferred_thumbnail?.image.uri),
+                    thumbnail2: fixURL(media.thumbnailImage?.uri),
+                    title,
+                  };
+                  // console.log('[FED] getPageSource video hd:', fixURL(media.playable_url_quality_hd));
+                  console.log("[IED] GOT A VIDEO MEDIA", media, JSON.stringify(data, null, 2));
+                  videos.push(data);
+                } else {
+                  let owner = document.title.split(' - ')[0];
+                  let data = {
+                    id: media.id,
+                    height: media.viewer_image?.height,
+                    width: media.viewer_image?.width,
+                    hd: fixURL(media.viewer_image?.uri || media.image.uri),
+                    sd: fixURL(media.image.uri),
+                    thumbnail: fixURL(media.image.uri),
+                    title: `${owner}'s Photo`,
+                  };
+                  console.log("[IED] GOT A PHOTO MEDIA", media, JSON.stringify(data, null, 2));
+                  photos.push(data);
+                }
+              }
             }
           }
           sendResponse({photos, videos});
