@@ -1,6 +1,9 @@
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
-  let { action, next, category, type, picCount, iconURL } = request;
-  console.log("[IED] got action:", action, next);
+  let { action, next, category, type, picCount, iconURL, observeDOM } = request;
+  console.log("[IED] got action:", action, request);
+
+  // let host = window.location.host.split('.').slice(-2).join('.');
+  let site = window.location.host.split('.').slice(-2, -1)[0];
   
   switch (action) {
     case 'bulkDownload':
@@ -26,82 +29,154 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
       sendResponse({result: onNext});
       break;
     case 'putDownloadButton':
+      let isMulti = picCount > 1;
+      let what = `${type}${isMulti ? 's' : ''}`;
+      let isObserved = false;
+      let btnContainer;
       let btn = document.createElement("button");
-      let what = `${type}${picCount > 1 ? 's' : ''}`;
-      btn.innerHTML = `Download ${what}<span>${picCount}</span>`;
+      btn.innerHTML = `Download ${what}` + (isMulti ? `<span>${picCount}</span>` : ``);
       let icon = document.createElement("img");
       icon.src = iconURL;
       btn.prepend(icon);
       btn.id = __IED_downloadButtonID;
       btn.addEventListener('click', __IED_clickIcon);
-      setTimeout(() => { // waiting for container element
+      let findContainer = () => {
         console.log("[IED] looking for container for download button:", category);
-        let findContainer = () => {
-          let container;
-          if (window.location.host.endsWith('facebook.com')) {
-            container = {
-              'video':
-                document.querySelector('div[data-pagelet="WatchPermalinkVideo"]') ||
-                document.querySelector('div#watch_feed>div>div>div>div>div>div:last-child') ||
-                document.querySelector('div[aria-label="Video Viewer"]>div:last-child>div>div>div:last-child>div>div>div>div:last-child>div>div:nth-child(2)') ||
-                document.querySelector('div[role="complementary"]>div>div>div>div>div>div:nth-child(2)') ||
-                document.querySelector('div[role="article"]>div>div>div>div>div>div:nth-child(2)>div>div:last-child>div>div>div>div'),
-              'story':
-                document.querySelector("div#viewer_dialog > div > div > div > div:nth-child(2) > div > div > div > div > div > div:nth-child(2) > div > div") ||
-                document.querySelector("div#viewer_dialog > div > div > div > div:nth-child(2) > div > div > div > div > div") ||
-                document.querySelector('div#viewer_dialog>div>div>div>div:last-child') ||
+        let containers = [];
+        let container;
+        if (site == 'facebook') {
+          switch (category) {
+            case 'video':
+              let watchFeeds = document.querySelectorAll("#watch_feed");
+              let watchFeed = watchFeeds[watchFeeds.length - 1];
+              containers = [
+                // https://www.facebook.com/watch/?ref=saved&v=1005070703497461
+                // https://www.facebook.com/watch/?ref=saved&v=434556038532388
+                // https://www.facebook.com/watch?v=815373882747287
+                watchFeed?.parentElement.querySelector("#watch_feed>div>div>div>div>div:first-child"),
+
+                // https://www.facebook.com/permalink.php?story_fbid=997830417807855&id=100027427190759
+                document.querySelector('div[role="article"][aria-posinset="1"]>div>div>div>div>div>div:nth-child(2)>div>div:nth-child(3)>div:nth-child(2)>div>div>div'),
+
+                // https://www.facebook.com/groups/kelakuankucing/posts/1223693578433648/
+                // https://www.facebook.com/permalink.php?story_fbid=pfbid0uRVc7EMLAuEQNAEppJrLwAxPbboDBmcBf5DLd22JMJunCVT8J2R8bu1bH8Frv6BSl&id=100075339912959
+                document.querySelector('div[role="article"][aria-posinset="1"]>div>div>div>div>div>div:nth-child(2)>div>div:nth-child(3)'),
+
+                // https://www.facebook.com/watch/latest/?badge_type=new_videos_from_followed_page&ref=updates_surface&video_channel_type=new_videos_from_followed_page
+                document.querySelector('div[role="main"]>div>div:nth-child(2)>div>div>div>div>div>div:first-child>div:nth-child(2)>div>div>div>div>div:nth-child(2)>div:nth-child(2)'),
+
+                // https://www.facebook.com/100001108515739/videos/687024489061568
+                document.querySelector('div[role="main"]'),
+                
+                // document.querySelector('div[aria-label="Video Viewer"]>div:last-child>div>div>div:last-child>div>div>div>div:last-child>div'),
+                // document.querySelector('div[data-pagelet="WatchPermalinkVideo"]'),
+                // document.querySelector('div[role="article"]>div>div>div>div>div>div:nth-child(2)>div>div:last-child>div>div>div'),
+              ];
+              break;
+            case 'story':
+              let viewerDialog = document.querySelector("#viewer_dialog");
+              containers = [
+                viewerDialog?.querySelector("div > div > div > div:nth-child(2) > div > div > div > div > div > div:nth-child(2) > div") ||
+                viewerDialog?.querySelector("div > div > div > div:nth-child(2) > div > div > div > div") ||
+                viewerDialog?.querySelector('div>div>div') ||
                 document.querySelector('div[data-pagelet="StoriesContentPane"]'),
-            }[category]?.parentNode;
-          } else if (window.location.host.endsWith('instagram.com')) {
-            container = category == 'photo'
-            ? document.querySelector('article[role="presentation"] div[role="presentation"]') ||
-              document.querySelector('article[role="presentation"]')
-            : document.querySelector('article[role="presentation"] > div > div') ||
-              document.querySelector('article[role="presentation"]');
-          } else {
-            container = document.querySelector('article div[id][aria-labelledby]') ||
-              document.querySelector('article');
+              ];
+              break;
           }
-          return container || document.body;
-        };
-        let putButton = (btn) => {
-          let container = findContainer();
+          for (let i = 0; i < containers.length; i++) {
+            if (containers[i]) {
+              container = containers[i];
+              console.log("[IED] YEAH! container found at index:", i, container);
+              break;
+            }
+          }
+          // container = {
+          //   'video':
+          //     document.querySelector('div[data-pagelet="WatchPermalinkVideo"]') ||
+          //     // https://www.facebook.com/watch/?v=621972135541269
+          //     // https://www.facebook.com/watch/?ref=saved&v=1005070703497461
+          //     document.querySelector("div#watch_feed > div > div:first-child > div > div > div:first-child > div:first-child") ||
+          //     document.querySelector('div#watch_feed>div>div>div>div>div>div:last-child') ||
+          //     document.querySelector('div[aria-label="Video Viewer"]>div:last-child>div>div>div:last-child>div>div>div>div:last-child>div>div:nth-child(2)') ||
+          //     // https://www.facebook.com/permalink.php?story_fbid=997830417807855&id=100027427190759
+          //     // https://www.facebook.com/groups/2904188786509645/posts/3101619583433230/
+          //     document.querySelector('div[role="article"][aria-posinset="1"] > div > div > div > div > div > div:nth-child(2) > div > div:nth-child(3) > div:last-child > div > div') ||
+          //     // https://www.facebook.com/100022735341936/videos/437542591391375
+          //     document.querySelector("#ssrb_top_nav_end")?.nextSibling?.querySelector("div > div > div > div > div > div > div > div > div > div > div > div > div:first-child > div") ||
+          //     // https://www.facebook.com/100022735341936/videos/437542591391375
+          //     document.querySelector('div[role="complementary"]>div>div>div>div>div>div:nth-child(2)') ||
+          //     document.querySelector('div[role="article"]>div>div>div>div>div>div:nth-child(2)>div>div:last-child>div>div>div>div'),
+          //   'story':
+          //     document.querySelector("div#viewer_dialog > div > div > div > div:nth-child(2) > div > div > div > div > div > div:nth-child(2) > div > div") ||
+          //     document.querySelector("div#viewer_dialog > div > div > div > div:nth-child(2) > div > div > div > div > div") ||
+          //     document.querySelector('div#viewer_dialog>div>div>div>div:last-child') ||
+          //     document.querySelector('div[data-pagelet="StoriesContentPane"]'),
+          // }[category]?.parentNode;
+        } else if (site == 'instagram') {
+          container = category == 'photo'
+          ? document.querySelector('article[role="presentation"] div[role="presentation"]') ||
+            document.querySelector('article[role="presentation"]')
+          : document.querySelector('article[role="presentation"] > div > div') ||
+            document.querySelector('article[role="presentation"]');
+        } else {
+          container = document.querySelector('article div[id][aria-labelledby]') ||
+            document.querySelector('article');
+        }
+        return container || document.body;
+      };
+      let putButton = (btn) => {
+        let container = findContainer();
+        if (container.tagName.toLowerCase() == 'body') {
+          console.log("[IED] container has yet to be found, waiting ...");
+        } else {
+          console.info("[IED] container found maybe:", container);
+        }
+        try {
           let prevButton = document.getElementById(__IED_downloadButtonID);
           prevButton?.remove();
+          container.style.position = 'relative';
           container.appendChild(btn);
           container.addEventListener('mouseenter', () => btn.classList.add('show'));
           container.addEventListener('mouseleave', () => btn.classList.remove('show'));
-        };
-
-        if (window.location.host.endsWith('facebook.com')) {
-          __IED_observeDOM(document.body, function(m) {
-            let addedNodes = [];
-            let removedNodes = [];
-            m.forEach(record => record.addedNodes.length & addedNodes.push(...record.addedNodes));
-            m.forEach(record => record.removedNodes.length & removedNodes.push(...record.removedNodes));
-            console.log('[FED] DOM HAS CHANGED!\nAdded:', addedNodes, '\nRemoved:', removedNodes);
-            let btnDownload = document.getElementById(__IED_downloadButtonID);
-            console.info('btnDownload exist:', !!btnDownload);
-            if (btnDownload) {
-              __IED_lastDownloadButton = btnDownload;
-            } else {
-              putButton(__IED_lastDownloadButton);
-            }
-          });
+          btnContainer = container;
+        } catch(e) {
+          console.warn("[IED] no, no... cannot put button here:", e);
         }
+      };
 
-        putButton(btn);
-      }, 1000);
-      sendResponse({result: 'ok'});
+      if (observeDOM && site == 'facebook') { // only observe facebook for now
+        __IED_observeDOM(document.body, function(m) {
+          let addedNodes = [];
+          let removedNodes = [];
+          m.forEach(record => record.addedNodes.length & addedNodes.push(...record.addedNodes));
+          m.forEach(record => record.removedNodes.length & removedNodes.push(...record.removedNodes));
+          // console.log('[FED] DOM HAS CHANGED!\nAdded:', addedNodes, '\nRemoved:', removedNodes);
+          let btnDownload = document.getElementById(__IED_downloadButtonID);
+          // console.info('btnDownload exist:', !!btnDownload);
+          if (btnDownload) {
+            __IED_lastDownloadButton = btnDownload;
+          } else {
+            console.info('[FED] dom has changed and removed our button, here we go again ...\nAdded:', addedNodes, '\nRemoved:', removedNodes);
+            putButton(__IED_lastDownloadButton);
+          }
+        });
+        isObserved = true;
+      }
+
+      putButton(btn);
+      sendResponse({
+        result: 'ok',
+        container: btnContainer?.tagName.toLowerCase(),
+        isObserved,
+      });
       break;
     case 'detectPics':
       let photos = [];
       let videos = [];
-      // let host = window.location.host.split('.').slice(-2).join('.');
-      let site = window.location.host.split('.').slice(-2, -1)[0];
       switch (site) {
         case 'facebook':
           let source = new XMLSerializer().serializeToString(document.body);
+          console.info("[FED] source OK!", category);
           let fixURL = (url) => url?.replaceAll('&amp;', '&');
           let strIndexes = (source, find) => {
             if (!source) return [];
@@ -156,16 +231,33 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
             }
             break;
             default: {
+
+              // https://www.facebook.com/aespadaily/posts/pfbid0CZkRHbg1PjEMPUFwjHJUS373ciXquY51cqokuW6k3uSrYD8YP9ujZN6MfAmiarEVl
+              // let checkPhotos = document
+              //   .querySelector('div[role="article"][aria-posinset="1"]>div>div>div>div>div>div:nth-child(2)>div>div:nth-child(3)>div:nth-child(2)>div>div>div')
+              //   .querySelectorAll('div>div>div>a[href*="/photos/"]');
+              // if (checkPhotos.length) {
+                
+              //   break;
+              // }
+
               let titlePrefix = `"color_ranges":[],"text":"`;
               let title = source.substring(source.indexOf(titlePrefix) + titlePrefix.length).split('"')[0];
               let findIndexes = strIndexes(source, '"playable_url":');
-              for (let h = 0; h < findIndexes.length; h++) {
-                let findFrom = findIndexes[h];
+              console.info("[FED] findIndexes", findIndexes);
+              if (!findIndexes.length) {
+                console.log("[FED] not finding any playable_url!");
+                break;
+              }
+              // for (let h = 0; h < findIndexes.length; h++) {
+              //   let findFrom = findIndexes[h];
+                let findFrom = findIndexes[0];
                 let findStart = '';
                 let findStartIndex = findFrom;
                 let findEnd = '';
                 let findEndIndex = findFrom;
                 let findStartRemaining = 1;
+                // TODO infinite loop: https://www.facebook.com/TopEx.Divine/posts/pfbid037omp11fCY8nS1Sp6izxRemKi5RHSMXpfqQCrLAijRdGwcvRF2cjX8NDmR18mfMsJl?notif_id=1657931896809022&notif_t=feedback_reaction_generic&ref=notif
                 while (findStart != '{' || findStartRemaining > 0) {
                   findStartIndex--;
                   findStart = source[findStartIndex];
@@ -182,10 +274,13 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                 let text = source.substring(findStartIndex, findEndIndex + 1);
                 console.log('[FED] getPageSource video SUCCESS!');
                 console.log('[FED] getPageSource video title:', title);
-                console.log('[FED] getPageSource text:', text);
+                // console.log('[FED] getPageSource text:', text);
                 let media;
-                try { media = JSON.parse(text); console.log('[FED] parsed json', media); } catch(e) {
-                  console.log('[FED] full source', source);
+                try {
+                  media = JSON.parse(text);
+                  // console.log('[FED] parsed json', media);
+                } catch(e) {
+                  // console.log('[FED] full source', source);
                   console.error('[FED] json malformatted', e);
                   break;
                 }
@@ -201,7 +296,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                   thumbnail: fixURL(media.preferred_thumbnail?.image.uri),
                   title,
                 });
-              }
+              // }
             }
           }
           sendResponse({photos, videos});
@@ -326,6 +421,7 @@ const __IED_injectCSS = () => {
     position: absolute;
     top: .75rem;
     right: .75rem;
+    z-index: 999;
     border: 0;
     border-radius: 2rem;
     padding: 0.45rem 1rem;

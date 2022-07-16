@@ -46,9 +46,27 @@ async function getCurrentTab(todo) {
   todo(tab);
 }
 
-function isURLFacebook(url) { return url && /https:\/\/[\w]+\.facebook\.com/.test(url); }
-function isURLFacebookVideo(url) { return isURLFacebook(url) && (url.includes('/videos/') || url.includes('/watch/?v=') || url.includes('/posts/')); }
-function isURLFacebookStory(url) { return isURLFacebook(url) && url.includes('/stories/'); }
+function isURLFacebook(url) {
+  return url && /https:\/\/[\w]+\.facebook\.com/.test(url);
+}
+function isURLFacebookVideo(url) {
+  return isURLFacebook(url) && (
+    url.includes('/videos/') ||
+    // url.includes('/watch/?') ||
+    url.includes('/watch/') ||
+    url.includes('/watch?') ||
+    url.includes('/permalink.php?story_fbid=') ||
+    url.includes('/posts/')
+  );
+}
+function isURLFacebookPhoto(url) {
+  return isURLFacebook(url) && (
+    url.includes('/posts/')
+  );
+}
+function isURLFacebookStory(url) {
+  return isURLFacebook(url) && url.includes('/stories/');
+}
 function isURLTwitter(url) {
   return url && /https:\/\/twitter\.com/.test(url);
 }
@@ -198,12 +216,12 @@ function analyze(tab) {
   console.log("[IED] load tab complete");
 
   if (isFacebookPost) {
-    detectDOM(tab, site, isFacebookVideo ? 'video' : 'story');
+    detectMedia(tab, site, isFacebookVideo ? 'video' : 'story');
     chrome.action.setTitle({title: 'Counting Facebook photos and videos ...', tabId});
     chrome.action.setBadgeText({'text': ''});
     generateIcons(tabId, site, '_counting');
   } else if (isTwitterPost) {
-    detectDOM(tab, site);
+    detectMedia(tab, site);
     chrome.action.setTitle({title: 'Counting Twitter photos and videos ...', tabId});
     chrome.action.setBadgeText({'text': ''});
     generateIcons(tabId, site, '_counting');
@@ -225,9 +243,11 @@ function analyze(tab) {
   }
 };
 
-function setDownloadIcon(tab, site, category, type, picCount, picTotal) {
+function setDownloadIcon(tab, site, category, picTotal) {
+  let picCount = pics.length + vids.length;
   console.log("[IED] detection count", picCount, '/', picTotal);
   if (!picCount) return;
+  let type = pics.length && vids.length ? 'photo & video' : pics.length ? 'photo' : 'video';
   let what = `${type}${picCount > 1 ? 's' : ''}`;
   chrome.action.setTitle({title: `Click to start download ${picCount > 1 ? 'all ' : ''}${picCount} ${what}`, tabId: tab.id});
   chrome.action.setBadgeBackgroundColor({'color': '#333333'});
@@ -255,42 +275,54 @@ function setDownloadIcon(tab, site, category, type, picCount, picTotal) {
   }
 }
 
-function putDownloadButton(tabID, site, category, type, picCount) {
+function putDownloadButton(tabID, site, category, type, picCount, observeDOM = true, retry = 0) {
   // let iconURL = chrome.runtime.getURL("/icons/icon24.png");
   let iconURL = chrome.runtime.getURL(`/icons/${site}_download16.png`);
-  chrome.tabs.sendMessage(tabID, { action: 'putDownloadButton', category, type, picCount, iconURL }, function(response) {
+  chrome.tabs.sendMessage(tabID, { action: 'putDownloadButton', category, type, picCount, iconURL, observeDOM }, function(response) {
     let error = chrome.runtime.lastError;
     if (error) return console.log(`[IED] putDownloadButton ${site} error:`, error.message);
-    console.log(`[IED] putDownloadButton ${site} result:`, response?.result);
+    console.log(`[IED] putDownloadButton ${site} result:`, response);
+    if (response?.container == 'body' && retry < 10) { // max retry is 10 seconds
+      setTimeout(() => { // wait another second for right container to be found
+        putDownloadButton(tabID, site, category, type, picCount, !response.isObserved, retry + 1);
+      }, 1000);
+    }
   });
 }
 
-function detectDOM(tab, site, category = 'post', next = true) {
-  console.log(`[IED] counting ${site} pics ...`);
+function detectMedia(tab, site, category = 'post', next = true) {
+  console.log(`[IED] counting media on ${site} ...`);
   chrome.tabs.sendMessage(tab.id, { action: 'detectPics', category, next }, function(response) {
     let error = chrome.runtime.lastError;
     if (error) return console.log(`[IED] detectPics ${site} error:`, error.message);
-    let picTotal = response?.total || 0;
-    let photos = response?.photos || [];
-    let videos = response?.videos || [];
-    let type = photos.length && videos.length ? 'photo & video' : photos.length ? 'photo' : 'video';
+    if (response == null) return console.warn(`[IED] detectPics got an empty response`);
+    let picTotal = response.total || 0;
+    let photos = response.photos || [];
+    let videos = response.videos || [];
     if (site == 'facebook') {
-      [...photos, ...videos].forEach((media) => { pushPic(media.hd || media.sd); });
-      picTotal = pics.length;
+      photos.forEach((media) => { pushPic(media.hd || media.sd); });
+      videos.forEach((media) => { pushPic(media.hd || media.sd, 'video'); });
+      picTotal = pics.length + vids.length;
     } else {
       photos.forEach((pic) => { pushPic(pic); });
     }
-    setDownloadIcon(tab, site, category, type, pics.length, picTotal);
-    if (!picTotal || pics.length < picTotal) {
-      detectDOM(tab, site, category, response?.canContinue ? next : !next);
-    } else if (site == 'twitter' && videos.length) { // only from twitter
+    let detectionCount = pics.length + vids.length;
+    setDownloadIcon(tab, site, category, picTotal);
+    if (site != 'facebook' && (!picTotal || detectionCount < picTotal)) { // detection is ongoing
+      console.log(`[IED] counting media on ${site} progress: ${detectionCount}/${picTotal}`);
+      detectMedia(tab, site, category, response.canContinue ? next : !next);
+    } else if (site == 'twitter' && videos.length) { // fetch twitter videos
       fetchTwitterVideo(tab);
     }
   });
 }
 
 function pushPic(url, type = 'photo') {
-  if (!pics.includes(url) && !pics.map((pic) => pic.split('?')[0]).includes(url.split('?')[0])) pics.push(url);
+  if (type == 'photo') {
+    if (!pics.includes(url) && !pics.map((pic) => pic.split('?')[0]).includes(url.split('?')[0])) pics.push(url);
+  } else {
+    if (!vids.includes(url) && !vids.map((pic) => pic.split('?')[0]).includes(url.split('?')[0])) vids.push(url);
+  }
 }
 
 function fetchTwitterVideo(tab) {
@@ -308,8 +340,8 @@ function fetchTwitterVideo(tab) {
     });
     if (!!largest) {
       console.log(`[IED] largest video url:`, largest.src);
-      pushPic(largest.src);
-      setDownloadIcon(tab, 'twitter', 'post', 'video', pics.length, pics.length);
+      pushPic(largest.src, 'video');
+      setDownloadIcon(tab, 'twitter', 'post', pics.length + vids.length);
     }
   }).catch(err => {
     console.warn(`[IED] couldn't fetch twitter video`, err, typeof err);
@@ -341,18 +373,18 @@ function fetchInstagramPost(tab) {
           if (videoUrl) pushPic(videoUrl, 'video');
           else if (imageUrl) pushPic(imageUrl);
         });
-        setDownloadIcon(tab, 'instagram', 'post', videoUrl ? 'video' : 'photo', pics.length, carouselMedia.length);
+        setDownloadIcon(tab, 'instagram', 'post', carouselMedia.length);
       } else if (videoVersions) {
         let videoUrl = videoVersions[0].url;
         if (videoUrl) {
           pushPic(videoUrl, 'video');
-          setDownloadIcon(tab, 'instagram', 'post', 'video', pics.length, 1);
+          setDownloadIcon(tab, 'instagram', 'post', 1);
         }
       } else if (imageVersions) {
         let imageUrl = imageVersions.candidates[0].url;
         if (imageUrl) {
           pushPic(imageUrl);
-          setDownloadIcon(tab, 'instagram', 'post', 'photo', pics.length, 1);
+          setDownloadIcon(tab, 'instagram', 'post', 1);
         }
       }
     });
@@ -365,7 +397,7 @@ function fetchInstagramPost(tab) {
     // }
     console.warn('[IED] read json error', err, typeof err);
     setTimeout(() => {
-      detectDOM(tab, 'instagram');
+      detectMedia(tab, 'instagram');
     }, 1000);
   });
 }
