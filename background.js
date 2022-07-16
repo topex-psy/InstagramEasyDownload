@@ -330,6 +330,7 @@ function detectMedia(tab, site, category = 'post', next = true) {
 }
 
 function pushPic(url, type = 'photo') {
+  if (!url) return;
   if (type == 'photo') {
     if (!pics.includes(url) && !pics.map((pic) => pic.split('?')[0]).includes(url.split('?')[0])) pics.push(url);
   } else {

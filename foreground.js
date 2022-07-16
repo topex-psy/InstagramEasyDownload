@@ -45,12 +45,14 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                 // https://www.facebook.com/watch/?ref=saved&v=434556038532388
                 // https://www.facebook.com/watch?v=815373882747287
                 // https://www.facebook.com/winterkimenthusiast/videos/563108265457091
-                watchFeed?.parentElement.querySelector("#watch_feed>div>div>div>div>div:first-child"),
-    
+                watchFeed?.parentElement.querySelector(`#watch_feed>div>div>div>div>div:first-child`),
+
                 // https://www.facebook.com/permalink.php?story_fbid=997830417807855&id=100027427190759
                 document.querySelector(`div[role="article"][aria-posinset="${posinset}"]>div>div>div>div>div>div:nth-child(2)>div>div:nth-child(3)>div:nth-child(2)>div>div>div`),
     
-                // https://www.facebook.com/groups/kelakuankucing/posts/1223693578433648/
+                // https://www.facebook.com/Eirene.Vidiarama/posts/pfbid02ys8EmPpvWrHFDZHHCArEgsKPWNvuGR7eKcZgH1CXCPjQbaoZjJKGdPZPQTSb5g15l
+                document.querySelector(`div[role="article"][aria-posinset="${posinset}"]>div>div>div>div>div>div:nth-child(2)>div>div:nth-child(3)>div:nth-child(2)`),
+
                 // https://www.facebook.com/permalink.php?story_fbid=pfbid0uRVc7EMLAuEQNAEppJrLwAxPbboDBmcBf5DLd22JMJunCVT8J2R8bu1bH8Frv6BSl&id=100075339912959
                 document.querySelector(`div[role="article"][aria-posinset="${posinset}"]>div>div>div>div>div>div:nth-child(2)>div>div:nth-child(3)`),
     
@@ -58,16 +60,18 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                 document.querySelector('div[role="main"]>div>div:nth-child(2)>div>div>div>div>div>div:first-child>div:nth-child(2)>div>div>div>div>div:nth-child(2)>div:nth-child(2)'),
     
                 // https://www.facebook.com/100001108515739/videos/687024489061568
-                document.querySelector('div[role="main"]'),
+                document.querySelector('div[role="main"] div[role="presentation"]')?.parentElement,
+
+                // https://www.facebook.com/groups/kelakuankucing/posts/1223693578433648/
+                document.querySelector('div[role="main"] video')?.parentElement,
               ];
               break;
             case 'story':
-              let viewerDialog = document.querySelector("#viewer_dialog");
               containers = [
-                viewerDialog?.querySelector("div > div > div > div:nth-child(2) > div > div > div > div > div > div:nth-child(2) > div") ||
-                viewerDialog?.querySelector("div > div > div > div:nth-child(2) > div > div > div > div") ||
-                viewerDialog?.querySelector('div>div>div') ||
-                document.querySelector('div[data-pagelet="StoriesContentPane"]'),
+                document.querySelector(`#viewer_dialog > div > div > div > div:nth-child(2) > div > div > div > div`),
+                document.querySelector(`#viewer_dialog > div > div > div > div:nth-child(2)`),
+                document.querySelector(`#viewer_dialog > div > div > div`),
+                document.querySelector(`div[data-pagelet="StoriesContentPane"]`),
               ];
               break;
           }
@@ -131,7 +135,10 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         try {
           let prevButton = document.getElementById(__IED_downloadButtonID);
           prevButton?.remove();
-          container.style.position = 'relative';
+          let containerPosition = getComputedStyle(container).position;
+          if (!['absolute', 'relative'].includes(containerPosition)) {
+            container.style.position = 'relative';
+          }
           container.appendChild(btn);
           container.addEventListener('mouseenter', () => btn.classList.add('show'));
           container.addEventListener('mouseleave', () => btn.classList.remove('show'));
@@ -220,6 +227,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                 for (let i = 0; i < attachments.length; i++) {
                   let { media } = attachments[i];
                   if (media.playable_url) {
+                    let title = media.title?.text || `${owner}'s Video Story`;
                     let data = {
                       id: media.id,
                       height: media.original_height,
@@ -228,7 +236,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                       hd: fixURL(media.playable_url_quality_hd),
                       sd: fixURL(media.playable_url),
                       thumbnail: fixURL(media.preferred_thumbnail?.image.uri),
-                      title: `${owner}'s Video Story ${new Date().toISOString().substring(0, 10)}`,
+                      title: `${title} ${new Date().toISOString().substring(0, 10)}`,
                     };
                     console.log("[IED] GOT A VIDEO STORY", media, JSON.stringify(data, null, 2));
                     videos.push(data);
