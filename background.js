@@ -11,15 +11,13 @@ const fetchTimeout = 3000;
 chrome.action.onClicked.addListener(onIconClick);
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   console.log("[IED] action from foreground", request, sender);
-  let { action, url } = request;
+  let { action, url, items } = request;
   let response = {ok: true};
   switch (action) {
-    case 'clickIcon':
-      response.ok = onIconClick();
-      break;
+    case 'downloadMedias': response.ok = downloadMedias(items); break;
+    case 'clickIcon': response.ok = onIconClick(); break; // TODO unused
     case 'escapeKey':
-      if (isURLInstagramPost(url)) break;
-      stopBulkDownload();
+      if (bulkDownload == currentTab.id) stopBulkDownload();
       break;
   }
   sendResponse({action, ...response});
@@ -83,6 +81,16 @@ function isURLInstagramPost(url) {
     /https:\/\/[\w]+\.(.*)instagram\.com\/reel\//.test(url)
   );
 }
+function downloadMedias(items) {
+  console.log('[IED] download medias from', currentTab, pics);
+  chrome.scripting.executeScript({
+    target: {tabId: currentTab.id},
+    func: downloadAll,
+    args: [items || [...pics, ...vids]]
+  });
+  return true;
+}
+
 function downloadAll(pics) {
   try {
     pics.forEach(url => {
@@ -128,12 +136,7 @@ function onIconClick() {
   const isInstagram = isURLInstagram(url);
 
   if (isFacebookPost || isInstagramPost || isTwitterPost) {
-    console.log('[IED] download photos from', currentTab, pics);
-    chrome.scripting.executeScript({
-      target: {tabId: currentTab.id},
-      func: downloadAll,
-      args: [[...pics, ...vids]]
-    });
+    downloadMedias();
   } else if (isInstagram) {
     if (bulkDownload == currentTab.id) {
       stopBulkDownload();

@@ -421,6 +421,8 @@ const __IED_downloadButtonID = '__IED_downloadButton';
 const __IED_downloadPopupWrapperID = '__IED_downloadPopupWrapper';
 const __IED_downloadPopupPicsTitleID = '__IED_downloadPopupPicsTitle';
 const __IED_downloadPopupVidsTitleID = '__IED_downloadPopupVidsTitle';
+const __IED_downloadPopupPicsDLID = '__IED_downloadPopupPicsDL';
+const __IED_downloadPopupVidsDLID = '__IED_downloadPopupVidsDL';
 const __IED_downloadPopupPicsID = '__IED_downloadPopupPics';
 const __IED_downloadPopupVidsID = '__IED_downloadPopupVids';
 const __IED_downloadPopupBodyID = '__IED_downloadPopupBody';
@@ -428,29 +430,33 @@ const __IED_downloadPopupFooterID = '__IED_downloadPopupFooter';
 const __IED_downloadPopupCloseID = '__IED_downloadPopupClose';
 const __IED_downloadPopupDownloadID = '__IED_downloadPopupDownload';
 const __IED_downloadPopupID = '__IED_downloadPopup';
-const __IED_closePopup = () => {
-  document.getElementById(__IED_downloadPopupWrapperID).classList.remove('show');
-};
+
+const __IED_closePopup = () => __IED_downloadPopupWrapper.classList.remove('show');
 const __IED_showPopup = (pics, vids, icon) => {
   let totalItems = pics.length + vids.length;
-  if (totalItems <= 3) { // direct download if there are just 3 items or below
-    __IED_clickIcon();
-    return;
-  }
-  document.getElementById(__IED_downloadPopupWrapperID).classList.add('show');
+  if (totalItems <= 3) return __IED_downloadMedias(); // direct download if there are just 3 items or below
+  __IED_downloadPopupWrapper.classList.add('show');
   let picsTitle = document.getElementById(__IED_downloadPopupPicsTitleID);
+  let picsDL = document.getElementById(__IED_downloadPopupPicsDLID);
   if (pics.length) {
     picsTitle.innerText = `Pictures (${pics.length})`;
     picsTitle.style.display = 'block';
+    picsDL.addEventListener('click', () => __IED_downloadMedias(pics, picsDL));
+    picsDL.style.display = 'block';
   } else {
     picsTitle.style.display = 'none';
+    picsDL.style.display = 'none';
   }
   let vidsTitle = document.getElementById(__IED_downloadPopupVidsTitleID);
+  let vidsDL = document.getElementById(__IED_downloadPopupVidsDLID);
   if (vids.length) {
     vidsTitle.innerText = `Videos (${vids.length})`;
     vidsTitle.style.display = 'block';
+    vidsDL.addEventListener('click', () => __IED_downloadMedias(vids, vidsDL));
+    vidsDL.style.display = 'block';
   } else {
     vidsTitle.style.display = 'none';
+    vidsDL.style.display = 'none';
   }
   let picsContainer = document.getElementById(__IED_downloadPopupPicsID);
   let vidsContainer = document.getElementById(__IED_downloadPopupVidsID);
@@ -482,16 +488,29 @@ const __IED_showPopup = (pics, vids, icon) => {
     vidsContainer.appendChild(a);
   });
 }
-const __IED_clickIcon = () => {
-  chrome.runtime?.sendMessage({action: 'clickIcon', url: window.location.href}, function(response) {
+// const __IED_clickIcon = () => {
+//   chrome.runtime?.sendMessage({action: 'clickIcon'}, function(response) {
+//     let error = chrome.runtime.lastError;
+//     if (error) return console.warn('[IED] clickIcon error', error.message);
+//     console.log('[IED] clickIcon response', response);
+//     if (!response.ok) {
+//       let btnDownload = document.getElementById(__IED_downloadButtonID);
+//       btnDownload.classList.add('error');
+//       setTimeout(() => {
+//         btnDownload.classList.remove('error');
+//       }, 200);
+//     }
+//   });
+// }
+const __IED_downloadMedias = (items, btn) => {
+  chrome.runtime?.sendMessage({action: 'downloadMedias', items}, function(response) {
     let error = chrome.runtime.lastError;
-    if (error) return console.warn('[IED] clickIcon error', error.message);
-    console.log('[IED] clickIcon response', response);
+    if (error) return console.warn('[IED] downloadMedias error', error.message);
+    console.log('[IED] downloadMedias response', response);
     if (!response.ok) {
-      let btnDownload = document.getElementById(__IED_downloadButtonID);
-      btnDownload.classList.add('error');
+      btn.classList.add('error');
       setTimeout(() => {
-        btnDownload.classList.remove('error');
+        btn.classList.remove('error');
       }, 200);
     }
   });
@@ -544,6 +563,9 @@ const __IED_injectCSS = () => {
     margin-left: 0.4rem !important;
     margin-right: -0.5rem !important;
   }
+  .${__IED_buttonClass}.error {
+    filter: blur(2px);
+  }
   #${__IED_downloadPopupWrapperID} {
     position: fixed;
     left: 0;
@@ -574,18 +596,24 @@ const __IED_injectCSS = () => {
     overflow-y: auto;
     flex-grow: 1;
   }
+  #${__IED_downloadPopupBodyID} button {
+    filter: hue-rotate(315deg);
+    float: right;
+  }
   #${__IED_downloadPopupBodyID} h4 {
     font-size: 1rem;
-    margin-bottom: 1rem;
+    margin: 0.75rem 0;
   }
   #${__IED_downloadPopupPicsID},
   #${__IED_downloadPopupVidsID} {
     margin-bottom: 1rem;
+    line-height: 0;
   }
   #${__IED_downloadPopupPicsID} img,
   #${__IED_downloadPopupVidsID} video {
     height: 7rem;
     margin-right: 0.5rem;
+    margin-bottom: 0.5rem;
     border-radius: 0.5rem;
     cursor: pointer;
     transition: all .5s ease-out;
@@ -627,9 +655,6 @@ const __IED_injectCSS = () => {
   #${__IED_downloadButtonID}.show {
     transform: translateY(0);
     opacity: 1;
-  }
-  #${__IED_downloadButtonID}.error {
-    filter: blur(2px);
   }`;
   document.head.appendChild(css);
 }
@@ -638,8 +663,10 @@ document.body.insertAdjacentHTML('beforeend', `
 <div id="${__IED_downloadPopupWrapperID}">
   <div id="${__IED_downloadPopupID}">
     <div id="${__IED_downloadPopupBodyID}">
+      <button class="${__IED_buttonClass}" id="${__IED_downloadPopupPicsDLID}">Download All</button>
       <h4 id="${__IED_downloadPopupPicsTitleID}"></h4>
       <div id="${__IED_downloadPopupPicsID}"></div>
+      <button class="${__IED_buttonClass}" id="${__IED_downloadPopupVidsDLID}">Download All</button>
       <h4 id="${__IED_downloadPopupVidsTitleID}"></h4>
       <div id="${__IED_downloadPopupVidsID}"></div>
     </div>
@@ -651,6 +678,11 @@ document.body.insertAdjacentHTML('beforeend', `
 </div>
 `);
 
-document.getElementById(__IED_downloadPopupDownloadID).addEventListener('click', __IED_clickIcon);
+const __IED_downloadPopupWrapper = document.getElementById(__IED_downloadPopupWrapperID);
+const __IED_downloadPopupDownload = document.getElementById(__IED_downloadPopupDownloadID);
+
+__IED_downloadPopupDownload.addEventListener('click', () => __IED_downloadMedias(null, __IED_downloadPopupDownload));
+// document.getElementById(__IED_downloadPopupDownloadID).addEventListener('click', __IED_clickIcon);
 document.getElementById(__IED_downloadPopupCloseID).addEventListener('click', __IED_closePopup);
+
 __IED_injectCSS();
