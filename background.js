@@ -107,6 +107,13 @@ function downloadAll(pics) {
   }
 }
 
+// function openPopup() {
+//   chrome.tabs.sendMessage(currentTab.id, { action: 'openPopup', pics, vids }, function(response) {
+//     let error = chrome.runtime.lastError;
+//     if (error) return console.log('[IED] openPopup error:', error.message);
+//   });
+// }
+
 function onIconClick() {
   console.log('[IED] onIconClick', currentTab, isReady);
   if (!currentTab || !isReady) {
@@ -261,7 +268,7 @@ function setDownloadIcon(tab, site, category, picTotal) {
     console.log("[IED] detection completed!");
 
     // put download button in foreground
-    putDownloadButton(tab, site, category, type, picCount);
+    putDownloadButton(tab, site, category, type);
 
     if (bulkDownload == tab.id) {
       onIconClick();
@@ -277,17 +284,17 @@ function setDownloadIcon(tab, site, category, picTotal) {
   }
 }
 
-function putDownloadButton(tab, site, category, type, picCount, observeDOM = true, retry = 0) {
+function putDownloadButton(tab, site, category, type, observeDOM = true, retry = 0) {
   // let iconURL = chrome.runtime.getURL("/icons/icon24.png");
   let iconURL = chrome.runtime.getURL(`/icons/${site}_download16.png`);
-  chrome.tabs.sendMessage(tab.id, { action: 'putDownloadButton', category, type, picCount, iconURL, observeDOM }, function(response) {
+  chrome.tabs.sendMessage(tab.id, { action: 'putDownloadButton', category, type, iconURL, observeDOM, pics, vids }, function(response) {
     let error = chrome.runtime.lastError;
     if (error) return console.log(`[IED] putDownloadButton ${site} error:`, error.message);
     console.log(`[IED] putDownloadButton ${site} result:`, response);
     if (response?.container == 'body') { // container not found yet
       if (retry < 10) { // max retry is 10 seconds
         setTimeout(() => { // wait another second for right container to be found
-          putDownloadButton(tab, site, category, type, picCount, !response.isObserved, retry + 1);
+          putDownloadButton(tab, site, category, type, !response.isObserved, retry + 1);
         }, 1000);
       }
     }

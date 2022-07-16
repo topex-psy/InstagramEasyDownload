@@ -1,5 +1,5 @@
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
-  let { action, next, category, type, picCount, iconURL, observeDOM } = request;
+  let { action, next, category, type, iconURL, observeDOM, pics, vids } = request;
   console.log("[IED] got action:", action, request);
 
   // let host = window.location.host.split('.').slice(-2).join('.');
@@ -7,6 +7,10 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   let feedContainer = document.body;
 
   switch (action) {
+    case 'openPopup':
+
+      sendResponse({result: true});
+      break;
     case 'bulkDownload':
       let bulkDownload = false;
       let firstPost = document.querySelector('a[href^="/p/"]');
@@ -82,22 +86,24 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
               ];
               break;
           }
-          for (let i = 0; i < containers.length; i++) {
-            if (containers[i]) {
-              container = containers[i];
-              console.log("[IED] YEAH! container found at index:", i, container);
-              break;
-            }
-          }
         } else if (site == 'instagram') {
-          container = category == 'photo'
-          ? document.querySelector('article[role="presentation"] div[role="presentation"]') ||
+          containers = [
+            document.querySelector('article[role="presentation"] div[role="presentation"]'),
+            document.querySelector('article[role="presentation"] > div > div'),
             document.querySelector('article[role="presentation"]')
-          : document.querySelector('article[role="presentation"] > div > div') ||
-            document.querySelector('article[role="presentation"]');
+          ];
         } else {
-          container = document.querySelector('article div[id][aria-labelledby]') ||
-            document.querySelector('article');
+          containers = [
+            document.querySelector('article div[id][aria-labelledby]'),
+            document.querySelector('article')
+          ];
+        }
+        for (let i = 0; i < containers.length; i++) {
+          if (containers[i]) {
+            container = containers[i];
+            console.log("[IED] YEAH! container found at index:", i, container);
+            break;
+          }
         }
         return container || document.body;
       };
@@ -113,6 +119,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
       };
 
       let putButton = () => {
+        let picCount = pics.length + vids.length;
         let container = checkContainer();
         let isMulti = picCount > 1;
         let what = `${type}${isMulti ? 's' : ''}`;
@@ -124,7 +131,8 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         btn.prepend(icon);
 
         btn.id = __IED_downloadButtonID;
-        btn.addEventListener('click', __IED_clickIcon);
+        btn.classList.add(__IED_buttonClass);
+        btn.addEventListener('click', () => __IED_showPopup(pics, vids, icon.cloneNode(true)));
 
         try {
           let prevButton = document.getElementById(__IED_downloadButtonID);
@@ -408,7 +416,72 @@ document.onkeydown = (e) => {
 };
 
 var __IED_previousHref;
+const __IED_buttonClass = '__IED_button';
 const __IED_downloadButtonID = '__IED_downloadButton';
+const __IED_downloadPopupWrapperID = '__IED_downloadPopupWrapper';
+const __IED_downloadPopupPicsTitleID = '__IED_downloadPopupPicsTitle';
+const __IED_downloadPopupVidsTitleID = '__IED_downloadPopupVidsTitle';
+const __IED_downloadPopupPicsID = '__IED_downloadPopupPics';
+const __IED_downloadPopupVidsID = '__IED_downloadPopupVids';
+const __IED_downloadPopupBodyID = '__IED_downloadPopupBody';
+const __IED_downloadPopupFooterID = '__IED_downloadPopupFooter';
+const __IED_downloadPopupCloseID = '__IED_downloadPopupClose';
+const __IED_downloadPopupDownloadID = '__IED_downloadPopupDownload';
+const __IED_downloadPopupID = '__IED_downloadPopup';
+const __IED_closePopup = () => {
+  document.getElementById(__IED_downloadPopupWrapperID).classList.remove('show');
+};
+const __IED_showPopup = (pics, vids, icon) => {
+  let totalItems = pics.length + vids.length;
+  if (totalItems <= 3) { // direct download if there are just 3 items or below
+    __IED_clickIcon();
+    return;
+  }
+  document.getElementById(__IED_downloadPopupWrapperID).classList.add('show');
+  let picsTitle = document.getElementById(__IED_downloadPopupPicsTitleID);
+  if (pics.length) {
+    picsTitle.innerText = `Pictures (${pics.length})`;
+    picsTitle.style.display = 'block';
+  } else {
+    picsTitle.style.display = 'none';
+  }
+  let vidsTitle = document.getElementById(__IED_downloadPopupVidsTitleID);
+  if (vids.length) {
+    vidsTitle.innerText = `Videos (${vids.length})`;
+    vidsTitle.style.display = 'block';
+  } else {
+    vidsTitle.style.display = 'none';
+  }
+  let picsContainer = document.getElementById(__IED_downloadPopupPicsID);
+  let vidsContainer = document.getElementById(__IED_downloadPopupVidsID);
+  let btnDownload = document.getElementById(__IED_downloadPopupDownloadID);
+  btnDownload.innerHTML = `Download All<span>${totalItems}</span>`;
+  btnDownload.prepend(icon);
+  picsContainer.innerHTML = '';
+  vidsContainer.innerHTML = '';
+  pics.forEach((url) => {
+    let a = document.createElement("a");
+    let img = document.createElement("img");
+    img.src = url;
+    a.href = url;
+    a.target = '_blank';
+    a.download = url.split("/").pop();
+    a.appendChild(img);
+    picsContainer.appendChild(a);
+  });
+  vids.forEach((url) => {
+    let a = document.createElement("a");
+    let source = document.createElement("source");
+    let video = document.createElement("video");
+    source.src = url;
+    a.href = url;
+    a.target = '_blank';
+    a.download = url.split("/").pop();
+    video.appendChild(source);
+    a.appendChild(video);
+    vidsContainer.appendChild(a);
+  });
+}
 const __IED_clickIcon = () => {
   chrome.runtime?.sendMessage({action: 'clickIcon', url: window.location.href}, function(response) {
     let error = chrome.runtime.lastError;
@@ -440,13 +513,9 @@ const __IED_observeDOM = (function() {
 const __IED_injectCSS = () => {
   var css = document.createElement("style");
   css.innerHTML = `
-  #${__IED_downloadButtonID} {
+  .${__IED_buttonClass} {
     display: flex;
     align-items: center;
-    position: absolute;
-    top: .75rem;
-    right: .75rem;
-    z-index: 999;
     border: 0;
     border-radius: 2rem;
     padding: 0.45rem 1rem;
@@ -455,6 +524,102 @@ const __IED_injectCSS = () => {
     background: linear-gradient(45deg, #42a661, #4bc3fd);
     box-shadow: 2px 2px 6px -4px #000;
     cursor: pointer;
+  }
+  .${__IED_buttonClass}:hover {
+    filter: brightness(1.1);
+  }
+  .${__IED_buttonClass}:active {
+    filter: brightness(.95);
+    transform: scale(.95);
+  }
+  .${__IED_buttonClass} img {
+    margin-right: 0.5rem !important;
+  }
+  .${__IED_buttonClass} span {
+    background: #00000045;
+    border-radius: 50%;
+    width: 1.5rem;
+    display: inline-block;
+    line-height: 1.5rem !important;
+    margin-left: 0.4rem !important;
+    margin-right: -0.5rem !important;
+  }
+  #${__IED_downloadPopupWrapperID} {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .3s ease;
+  }
+  #${__IED_downloadPopupID} {
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border-radius: 1rem;
+    padding: 2rem;
+    max-width: 700px;
+    max-height: 70vh;
+    box-shadow: 0 2px 10px -7px rgba(0, 0, 0, 0);
+    transform: scale(.8);
+    transition: all .5s ease;
+  }
+  #${__IED_downloadPopupBodyID} {
+    overflow-y: auto;
+    flex-grow: 1;
+  }
+  #${__IED_downloadPopupBodyID} h4 {
+    font-size: 1rem;
+    margin-bottom: 1rem;
+  }
+  #${__IED_downloadPopupPicsID},
+  #${__IED_downloadPopupVidsID} {
+    margin-bottom: 1rem;
+  }
+  #${__IED_downloadPopupPicsID} img,
+  #${__IED_downloadPopupVidsID} video {
+    height: 7rem;
+    margin-right: 0.5rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition: all .5s ease-out;
+  }
+  #${__IED_downloadPopupPicsID} img:hover,
+  #${__IED_downloadPopupVidsID} video:hover {
+    transform: scale(1.05);
+    filter: brightness(1.2) contrast(0.8);
+  }
+  #${__IED_downloadPopupFooterID} {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1rem;
+  }
+  #${__IED_downloadPopupFooterID} > button {
+    margin: 0 .35rem;
+  }
+  #${__IED_downloadPopupCloseID} {
+    filter: grayscale(1);
+  }
+  #${__IED_downloadPopupWrapperID}.show {
+    pointer-events: auto;
+    opacity: 1;
+  }
+  #${__IED_downloadPopupWrapperID}.show #${__IED_downloadPopupID} {
+    box-shadow: 0 2px 20px -7px rgba(0, 0, 0, .5);
+    transform: scale(1);
+  }
+  #${__IED_downloadButtonID} {
+    position: absolute;
+    top: .75rem;
+    right: .75rem;
+    z-index: 999;
     opacity: 0;
     transform: translateY(-1rem);
     transition: all .2s ease;
@@ -465,26 +630,27 @@ const __IED_injectCSS = () => {
   }
   #${__IED_downloadButtonID}.error {
     filter: blur(2px);
-  }
-  #${__IED_downloadButtonID} img {
-    margin-right: 0.5rem;
-  }
-  #${__IED_downloadButtonID} span {
-    background: #00000045;
-    border-radius: 50%;
-    width: 1.5rem;
-    display: inline-block;
-    line-height: 1.5rem;
-    margin-left: 0.4rem;
-    margin-right: -0.5rem;
-  }
-  #${__IED_downloadButtonID}:hover {
-    filter: brightness(1.1);
-  }
-  #${__IED_downloadButtonID}:active {
-    filter: brightness(.95);
-    transform: scale(.95);
   }`;
   document.head.appendChild(css);
 }
+
+document.body.insertAdjacentHTML('beforeend', `
+<div id="${__IED_downloadPopupWrapperID}">
+  <div id="${__IED_downloadPopupID}">
+    <div id="${__IED_downloadPopupBodyID}">
+      <h4 id="${__IED_downloadPopupPicsTitleID}"></h4>
+      <div id="${__IED_downloadPopupPicsID}"></div>
+      <h4 id="${__IED_downloadPopupVidsTitleID}"></h4>
+      <div id="${__IED_downloadPopupVidsID}"></div>
+    </div>
+    <div id="${__IED_downloadPopupFooterID}">
+      <button class="${__IED_buttonClass}" id="${__IED_downloadPopupDownloadID}"></button>
+      <button class="${__IED_buttonClass}" id="${__IED_downloadPopupCloseID}">Close</button>
+    </div>
+  </div>
+</div>
+`);
+
+document.getElementById(__IED_downloadPopupDownloadID).addEventListener('click', __IED_clickIcon);
+document.getElementById(__IED_downloadPopupCloseID).addEventListener('click', __IED_closePopup);
 __IED_injectCSS();
