@@ -200,8 +200,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
               let endingKey = `"is_final":`;
               let endingIndex = splitText[0].length + starts.length + splitText[1].indexOf(endingKey) + endingKey.length;
               endingIndex += source[endingIndex] == 't' ? 6 : 7;
-              let text = source.substring(source.indexOf(starts), endingIndex);
-              let json = JSON.parse(text);
+              let json = JSON.parse(source.substring(source.indexOf(starts), endingIndex));
               let owner = json.data.bucket.story_bucket_owner.name;
               let { edges } = json.data.bucket.unified_stories;
               for (let h = 0; h < edges.length; h++) {
@@ -242,6 +241,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
             default: {
               let titlePrefix = `"color_ranges":[],"text":"`;
               let title = source.substring(source.indexOf(titlePrefix) + titlePrefix.length).split('"')[0];
+              console.info("[FED] media title:", title);
               let findIndexes = [
                 ...strIndexes('"playable_url":'),
                 ...strIndexes('"viewer_image":'),
@@ -273,12 +273,11 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                   if (findEnd == '{') findEndRemaining++;
                   else if (findEnd == '}') findEndRemaining--;
                 }
-                let text = source.substring(findStartIndex, findEndIndex + 1);
-                // console.log('[FED] getPageSource title:', title);
-                // console.log('[FED] getPageSource text:', text);
+                let mediaSource = source.substring(findStartIndex, findEndIndex + 1);
+                // console.log('[FED] media source:', mediaSource);
                 let media;
                 try {
-                  media = JSON.parse(text);
+                  media = JSON.parse(mediaSource);
                   // console.log('[FED] parsed json', media);
                 } catch(e) {
                   // console.log('[FED] full source', source);
@@ -299,7 +298,6 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                     thumbnail2: fixURL(media.thumbnailImage?.uri),
                     title,
                   };
-                  // console.log('[FED] getPageSource video hd:', fixURL(media.playable_url_quality_hd));
                   console.log("[IED] GOT A VIDEO MEDIA", media, JSON.stringify(data, null, 2));
                   videos.push(data);
                 } else {
@@ -307,9 +305,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                   let owner = document.title.split(' - ')[0];
                   let possibleImages = [media.viewer_image, media.photo_image, media.image];
                   console.log("[IED] possibleImages", possibleImages);
-                  let findLargest = possibleImages
-                    .filter((pic) => pic?.uri)
-                    .sort((a,b) => a.width > b.width ? -1 : a.width < b.width ? 1 : 0);
+                  let findLargest = possibleImages.filter((pic) => pic?.uri).sort((a,b) => a.width > b.width ? -1 : a.width < b.width ? 1 : 0);
                   console.log("[IED] findLargest", findLargest);
                   if (!findLargest.length) continue;
                   let largest = findLargest[0];
@@ -352,7 +348,6 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
           if (!images.length) images = document.querySelectorAll('article[role="presentation"] img[srcset][src]');
           if (!images.length) images = [document.querySelector('article[role="presentation"] img[src]')];
 
-          // TODO mengandung foto & video: https://www.instagram.com/p/Cf_w5v7JMP2/
           images.forEach(img => {
             // if (img.hasAttribute('srcset')) {
             //   let srcset = img.getAttribute('srcset');

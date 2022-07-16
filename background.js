@@ -61,6 +61,7 @@ function isURLFacebookVideo(url) {
 function isURLFacebookPhoto(url) {
   return isURLFacebook(url) && (
     url.includes('/photo/?') ||
+    url.includes('/photos/') ||
     url.includes('/posts/')
   );
 }
