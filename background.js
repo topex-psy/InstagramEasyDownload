@@ -5,6 +5,7 @@ var bulkDownload;
 var currentTab;
 var fetchController;
 var inFocus = true;
+var reanalyze = false;
 
 const fetchTimeout = 3000;
 
@@ -14,6 +15,10 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   let { action, url } = request;
   let response = {ok: true};
   switch (action) {
+    case 'reanalyze':
+      reanalyze = true;
+      analyzeTab();
+      break;
     case 'clickIcon':
       response.ok = onIconClick();
       break;
@@ -278,10 +283,11 @@ function setDownloadIcon(tab, site, category, picTotal) {
 function putDownloadButton(tabID, site, category, type, picCount, observeDOM = true, retry = 0) {
   // let iconURL = chrome.runtime.getURL("/icons/icon24.png");
   let iconURL = chrome.runtime.getURL(`/icons/${site}_download16.png`);
-  chrome.tabs.sendMessage(tabID, { action: 'putDownloadButton', category, type, picCount, iconURL, observeDOM }, function(response) {
+  chrome.tabs.sendMessage(tabID, { action: 'putDownloadButton', category, type, picCount, iconURL, observeDOM, reanalyze }, function(response) {
     let error = chrome.runtime.lastError;
     if (error) return console.log(`[IED] putDownloadButton ${site} error:`, error.message);
     console.log(`[IED] putDownloadButton ${site} result:`, response);
+    reanalyze = false;
     if (response?.container == 'body' && retry < 10) { // max retry is 10 seconds
       setTimeout(() => { // wait another second for right container to be found
         putDownloadButton(tabID, site, category, type, picCount, !response.isObserved, retry + 1);
