@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Social Media Easy Download",
   "version": "0.0.1",
-  "description": "1-Click to download all photo and videos from Facebook, Instagram & Twitter HD.",
+  "description": "Download all HQ photo and videos from Facebook, Instagram & Twitter.",
   "author": "Taufik Nur Rahmanda",
   "permissions": [
   ],
@@ -44,7 +44,8 @@
         "icons/facebook_download24.png",
         "icons/instagram_download24.png",
         "icons/twitter_download24.png",
-        "icons/new_tab.png"
+        "icons/new_tab.png",
+        "icons/spinner.gif"
       ],
       "matches": [
         "https://*.facebook.com/*",

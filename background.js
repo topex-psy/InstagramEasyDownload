@@ -92,24 +92,6 @@ function downloadMedias(medias, download = false) {
     console.log('[IED] downloadMedias result:', response?.result);
   });
 }
-// function downloadAll(medias, download = false) {
-//   try {
-//     medias.forEach(url => {
-//       const a = document.createElement("a");
-//       a.href = url;
-//       if (!download) a.target = '_blank';
-//       a.download = url.split("/").pop().split('?')[0];
-//       a.style.display = 'none';
-//       document.body.appendChild(a);
-//       a.click();
-//       a.remove();
-//     });
-//     return true;
-//   } catch(err) {
-//     console.error('[IED] download media error:', err);
-//     return false;
-//   }
-// }
 
 function onIconClick(download = false) {
   console.log('[IED] onIconClick tab', currentTab, isReady);
@@ -284,8 +266,7 @@ function setDownloadIcon(tab, site, category, picTotal) {
 }
 
 function putDownloadButton(tab, site, category, type, observeDOM = true, retry = 0) {
-  let iconURL = chrome.runtime.getURL(`/icons/${site}_download24.png`);
-  chrome.tabs.sendMessage(tab.id, { action: 'putDownloadButton', category, type, iconURL, observeDOM, pics, vids }, function(response) {
+  chrome.tabs.sendMessage(tab.id, { action: 'putDownloadButton', category, type, observeDOM, pics, vids }, function(response) {
     let error = chrome.runtime.lastError;
     if (error) return console.log(`[IED] putDownloadButton ${site} error:`, error.message);
     console.log(`[IED] putDownloadButton ${site} result:`, response);
