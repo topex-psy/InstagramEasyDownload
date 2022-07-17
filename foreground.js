@@ -41,9 +41,15 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         if (site == 'facebook') {
           switch (category) {
             case 'photo':
+              let mainScreens = document.querySelectorAll('div[role="main"]');
+              let mainScreen = mainScreens[mainScreens.length - 1];
               containers = [
                 // https://www.facebook.com/photo/?fbid=5208951275826389&set=a.525094930878737
-                document.querySelector('div[role="main"] img')?.parentElement,
+                // document.querySelector('div[aria-label="Photo Viewer"] div[role="main"] img')?.parentElement,
+
+                // https://www.facebook.com/photo/?fbid=5208951275826389&set=a.525094930878737
+                // document.querySelector('div[role="main"] img')?.parentElement,
+                mainScreen?.querySelector('img')?.parentElement,
               ];
               break;
             case 'video':
@@ -56,6 +62,9 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                 // https://www.facebook.com/watch?v=815373882747287
                 // https://www.facebook.com/winterkimenthusiast/videos/563108265457091
                 watchFeed?.parentElement.querySelector(`#watch_feed>div>div>div>div>div:first-child`),
+
+                // https://www.facebook.com/nekomarucosplay/posts/pfbid02Y5GYQAGSt9TWcdTovg8ydwT7kV23aB3Paundrokukg45umPyZrLc9ghFWGZLnMPXl
+                document.querySelector('div[role="article"] a[href*="/photos/"] img')?.parentElement,
 
                 // https://www.facebook.com/permalink.php?story_fbid=997830417807855&id=100027427190759
                 // https://www.facebook.com/aespadaily/posts/pfbid033A2Puf6yJoLjWBvaTdRcfukxg2ZHJSGbu37G7iig85oQkqdA4YSSEespds98qQvCl
@@ -101,7 +110,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         for (let i = 0; i < containers.length; i++) {
           if (containers[i]) {
             container = containers[i];
-            console.log("[IED] YEAH! container found at index:", i, container);
+            console.log(`[IED] YEAH! container for ${category} found at index:`, i, container);
             break;
           }
         }
@@ -188,7 +197,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
           // get page source
           let source = new XMLSerializer().serializeToString(document.body);
           console.info("[FED] source OK!", category);
-          console.log('[FED] source:', source);
+          // console.log('[FED] source:', source);
           let fixURL = (url) => url?.replaceAll('&amp;', '&').replaceAll('\\','');
           let strIndexes = (find) => {
             if (!source) return [];
@@ -261,13 +270,11 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
               }
               for (let h = 0; h < findIndexes.length; h++) {
                 let findFrom = findIndexes[h];
-                // let findFrom = findIndexes[0];
                 let findStart = '';
                 let findStartIndex = findFrom;
                 let findEnd = '';
                 let findEndIndex = findFrom;
                 let findStartRemaining = 1;
-                // TODO FIXME infinite loop: https://www.facebook.com/TopEx.Divine/posts/pfbid037omp11fCY8nS1Sp6izxRemKi5RHSMXpfqQCrLAijRdGwcvRF2cjX8NDmR18mfMsJl?notif_id=1657931896809022&notif_t=feedback_reaction_generic&ref=notif
                 while (findStart != '{' || findStartRemaining > 0) {
                   findStartIndex--;
                   findStart = source[findStartIndex];
@@ -293,6 +300,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                   break;
                 }
                 if (media.playable_url) {
+                  if (media.animated_image) continue; // exclude stickers
                   if (videos.find((vid) => vid.id && vid.id == media.id)) continue;
                   let data = {
                     id: media.id,
@@ -309,7 +317,8 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                   console.log("[IED] GOT A VIDEO MEDIA", media, JSON.stringify(data, null, 2));
                   videos.push(data);
                 } else {
-                  if (photos.find((pic) => pic.id && pic.id == media.id)) continue;
+                  if (media.__typename == 'Sticker' || media.animated_image || media.massive_image) continue; // exclude stickers
+                  if (photos.find((pic) => pic.id && pic.id == media.id)) continue; // already exists
                   let owner = document.title.split(' - ')[0];
                   let possibleImages = [media.viewer_image, media.photo_image, media.image];
                   console.log("[IED] possibleImages", possibleImages);
@@ -322,6 +331,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                     id: media.id,
                     width: largest.width,
                     height: largest.height,
+                    url: media.url,
                     hd: fixURL(largest.uri),
                     sd: fixURL(medium.uri),
                     thumbnail: fixURL(medium.uri),
@@ -621,7 +631,7 @@ const __IED_injectCSS = () => {
   #${__IED_downloadPopupPicsID} img:hover,
   #${__IED_downloadPopupVidsID} video:hover {
     transform: scale(1.05);
-    filter: brightness(1.2) contrast(0.8);
+    filter: brightness(1.1) contrast(1) drop-shadow(0 2px 5px rgba(0,0,0,.2));
   }
   #${__IED_downloadPopupFooterID} {
     display: flex;
@@ -681,8 +691,15 @@ document.body.insertAdjacentHTML('beforeend', `
 const __IED_downloadPopupWrapper = document.getElementById(__IED_downloadPopupWrapperID);
 const __IED_downloadPopupDownload = document.getElementById(__IED_downloadPopupDownloadID);
 
+__IED_downloadPopupWrapper.addEventListener('click', __IED_closePopup);
 __IED_downloadPopupDownload.addEventListener('click', () => __IED_downloadMedias(null, __IED_downloadPopupDownload));
-// document.getElementById(__IED_downloadPopupDownloadID).addEventListener('click', __IED_clickIcon);
 document.getElementById(__IED_downloadPopupCloseID).addEventListener('click', __IED_closePopup);
+document.getElementById(__IED_downloadPopupID).addEventListener('click', (e) => e.stopPropagation());
+window.addEventListener('hashchange', function() {
+  console.log("[FED] URL changed hash!", window.location.href, window.location.hash);
+});
+window.addEventListener('popstate', function(e) {
+  console.log("[FED] URL changed pop!", window.location.href, e.state);
+});
 
 __IED_injectCSS();
