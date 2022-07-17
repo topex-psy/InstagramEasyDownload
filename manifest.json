@@ -5,7 +5,6 @@
   "description": "1-Click to download all photo and videos from Facebook, Instagram & Twitter HD.",
   "author": "Taufik Nur Rahmanda",
   "permissions": [
-    "scripting"
   ],
   "host_permissions": [
     "https://*.facebook.com/*",
@@ -42,10 +41,10 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "icons/icon24.png",
-        "icons/facebook_download16.png",
-        "icons/instagram_download16.png",
-        "icons/twitter_download16.png"
+        "icons/facebook_download24.png",
+        "icons/instagram_download24.png",
+        "icons/twitter_download24.png",
+        "icons/new_tab.png"
       ],
       "matches": [
         "https://*.facebook.com/*",

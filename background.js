@@ -11,11 +11,9 @@ const fetchTimeout = 3000;
 chrome.action.onClicked.addListener(onIconClick);
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   console.log("[IED] action from foreground", request, sender);
-  let { action, url, items } = request;
+  let { action } = request;
   let response = {ok: true};
   switch (action) {
-    case 'downloadMedias': response.ok = downloadMedias(items); break;
-    case 'clickIcon': response.ok = onIconClick(); break; // TODO unused
     case 'escapeKey':
       if (bulkDownload == currentTab.id) stopBulkDownload();
       break;
@@ -81,46 +79,33 @@ function isURLInstagramPost(url) {
     /https:\/\/[\w]+\.(.*)instagram\.com\/reel\//.test(url)
   );
 }
-function downloadMedias(items) {
-  console.log('[IED] download medias from', currentTab, pics);
-  chrome.scripting.executeScript({
-    target: {tabId: currentTab.id},
-    func: downloadAll,
-    args: [items || [...pics, ...vids]]
-  });
-  return true;
-}
 
-function downloadAll(pics) {
+function downloadMedias(medias, download = false) {
+  console.log('[IED] download medias from', currentTab, medias);
+  chrome.tabs.sendMessage(currentTab.id, { action: 'downloadMedias', medias, download }, function(response) {
+    let error = chrome.runtime.lastError;
+    if (error) return console.log('[IED] downloadMedias error:', error.message);
+    console.log('[IED] downloadMedias result:', response?.result);
+  });
+}
+function downloadAll(medias, download = false) {
   try {
-    pics.forEach(url => {
-      // alt 1
+    medias.forEach(url => {
       const a = document.createElement("a");
       a.href = url;
-      a.target = '_blank';
-      a.download = url.split("/").pop();
+      if (!download) a.target = '_blank';
+      a.download = url.split("/").pop().split('?')[0];
       a.style.display = 'none';
       document.body.appendChild(a);
       a.click();
       a.remove();
-
-      // alt 2
-      // let popup = window.open(url);
-      // popup.blur();
-      // window.focus();
     });
     return true;
   } catch(err) {
+    console.error('[IED] download media error:', err);
     return false;
   }
 }
-
-// function openPopup() {
-//   chrome.tabs.sendMessage(currentTab.id, { action: 'openPopup', pics, vids }, function(response) {
-//     let error = chrome.runtime.lastError;
-//     if (error) return console.log('[IED] openPopup error:', error.message);
-//   });
-// }
 
 function onIconClick() {
   console.log('[IED] onIconClick', currentTab, isReady);
@@ -198,6 +183,10 @@ function analyze(tab) {
   console.log("[IED] tab is instagram post", isInstagramPost);
   console.log("[IED] tab is twitter", isTwitter);
   console.log("[IED] tab is twitter post", isTwitterPost);
+  
+  if (currentTab?.url && url != currentTab.url) {
+    console.log("[IED] LOL tab url has changed");
+  }
 
   currentTab = tab;
   pics.length = 0;
@@ -228,7 +217,9 @@ function analyze(tab) {
   console.log("[IED] load tab complete");
 
   if (isFacebookPost) {
-    detectMedia(tab, site, isFacebookVideo ? 'video' : isFacebookStory ? 'story' : 'photo');
+    setTimeout(() => {
+      detectMedia(tab, site, isFacebookVideo ? 'video' : isFacebookStory ? 'story' : 'photo');
+    }, 1000);
     chrome.action.setTitle({title: 'Counting Facebook photos and videos ...', tabId});
     chrome.action.setBadgeText({'text': ''});
     generateIcons(tabId, site, '_counting');
@@ -288,8 +279,7 @@ function setDownloadIcon(tab, site, category, picTotal) {
 }
 
 function putDownloadButton(tab, site, category, type, observeDOM = true, retry = 0) {
-  // let iconURL = chrome.runtime.getURL("/icons/icon24.png");
-  let iconURL = chrome.runtime.getURL(`/icons/${site}_download16.png`);
+  let iconURL = chrome.runtime.getURL(`/icons/${site}_download24.png`);
   chrome.tabs.sendMessage(tab.id, { action: 'putDownloadButton', category, type, iconURL, observeDOM, pics, vids }, function(response) {
     let error = chrome.runtime.lastError;
     if (error) return console.log(`[IED] putDownloadButton ${site} error:`, error.message);
@@ -305,11 +295,11 @@ function putDownloadButton(tab, site, category, type, observeDOM = true, retry =
 }
 
 function detectMedia(tab, site, category = 'post', next = true) {
-  console.log(`[IED] counting media on ${site} ...`);
-  chrome.tabs.sendMessage(tab.id, { action: 'detectPics', category, next }, function(response) {
+  console.log(`[IED] counting media on ${site}:`, tab.url);
+  chrome.tabs.sendMessage(tab.id, { action: 'detectMedias', category, next }, function(response) {
     let error = chrome.runtime.lastError;
-    if (error) return console.log(`[IED] detectPics ${site} error:`, error.message);
-    if (response == null) return console.warn(`[IED] detectPics got an empty response`);
+    if (error) return console.log(`[IED] detectMedias ${site} error:`, error.message);
+    if (response == null) return console.warn(`[IED] detectMedias got an empty response`);
     let picTotal = response.total || 0;
     let photos = response.photos || [];
     let videos = response.videos || [];

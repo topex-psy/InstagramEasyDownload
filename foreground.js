@@ -7,9 +7,9 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   let feedContainer = document.body;
 
   switch (action) {
-    case 'openPopup':
-
-      sendResponse({result: true});
+    case 'downloadMedias':
+      let downloadResult = __IED_downloadMedias(medias, null, download);
+      sendResponse({result: downloadResult});
       break;
     case 'bulkDownload':
       let bulkDownload = false;
@@ -64,7 +64,8 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                 watchFeed?.parentElement.querySelector(`#watch_feed>div>div>div>div>div:first-child`),
 
                 // https://www.facebook.com/nekomarucosplay/posts/pfbid02Y5GYQAGSt9TWcdTovg8ydwT7kV23aB3Paundrokukg45umPyZrLc9ghFWGZLnMPXl
-                document.querySelector('div[role="article"] a[href*="/photos/"] img')?.parentElement,
+                // https://www.facebook.com/aespadaily/posts/pfbid0CZkRHbg1PjEMPUFwjHJUS373ciXquY51cqokuW6k3uSrYD8YP9ujZN6MfAmiarEVl
+                document.querySelector('div[role="article"] a[href*="/photos/"] img')?.closest('a').parentElement.parentElement.parentElement,
 
                 // https://www.facebook.com/permalink.php?story_fbid=997830417807855&id=100027427190759
                 // https://www.facebook.com/aespadaily/posts/pfbid033A2Puf6yJoLjWBvaTdRcfukxg2ZHJSGbu37G7iig85oQkqdA4YSSEespds98qQvCl
@@ -165,6 +166,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
               let btnDownload = document.getElementById(__IED_downloadButtonID);
               if (window.location.href != __IED_previousHref) {
                 console.info('[FED] URL has changed and removed our button, here we go again ...\nAdded:', addedNodes, '\nRemoved:', removedNodes);
+                console.info('[FED] URL change: ', __IED_previousHref, '->', window.location.href);
                 // TODO reanalyze
               } else if (!btnDownload) {
                 console.info('[FED] DOM has changed and removed our button, here we go again ...\nAdded:', addedNodes, '\nRemoved:', removedNodes);
@@ -188,7 +190,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         isObserved,
       });
       break;
-    case 'detectPics':
+    case 'detectMedias':
       let photos = [];
       let videos = [];
       switch (site) {
@@ -197,7 +199,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
           // get page source
           let source = new XMLSerializer().serializeToString(document.body);
           console.info("[FED] source OK!", category);
-          // console.log('[FED] source:', source);
+          console.log('[FED] source:', source);
           let fixURL = (url) => url?.replaceAll('&amp;', '&').replaceAll('\\','');
           let strIndexes = (find) => {
             if (!source) return [];
@@ -316,7 +318,8 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                   };
                   console.log("[IED] GOT A VIDEO MEDIA", media, JSON.stringify(data, null, 2));
                   videos.push(data);
-                } else {
+                } else if (!window.location.href.includes('/watch/')) {
+                // } else if (window.location.href.includes('/posts/')) {
                   if (media.__typename == 'Sticker' || media.animated_image || media.massive_image) continue; // exclude stickers
                   if (photos.find((pic) => pic.id && pic.id == media.id)) continue; // already exists
                   let owner = document.title.split(' - ')[0];
@@ -417,6 +420,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
 document.onkeydown = (e) => {
   if (e.key === "Escape") {
     // e.preventDefault();
+    __IED_closePopup();
     chrome.runtime?.sendMessage({action: 'escapeKey', url: window.location.href}, function(response) {
       let error = chrome.runtime.lastError;
       if (error) return console.log('[IED] escapeKey error', error.message);
@@ -427,46 +431,52 @@ document.onkeydown = (e) => {
 
 var __IED_previousHref;
 const __IED_buttonClass = '__IED_button';
+const __IED_newTabClass = '__IED_newTab';
+const __IED_captionClass = '__IED_caption';
 const __IED_downloadButtonID = '__IED_downloadButton';
 const __IED_downloadPopupWrapperID = '__IED_downloadPopupWrapper';
 const __IED_downloadPopupPicsTitleID = '__IED_downloadPopupPicsTitle';
 const __IED_downloadPopupVidsTitleID = '__IED_downloadPopupVidsTitle';
 const __IED_downloadPopupPicsDLID = '__IED_downloadPopupPicsDL';
 const __IED_downloadPopupVidsDLID = '__IED_downloadPopupVidsDL';
+const __IED_downloadPopupPicsNTID = '__IED_downloadPopupPicsNT';
+const __IED_downloadPopupVidsNTID = '__IED_downloadPopupVidsNT';
 const __IED_downloadPopupPicsID = '__IED_downloadPopupPics';
 const __IED_downloadPopupVidsID = '__IED_downloadPopupVids';
 const __IED_downloadPopupBodyID = '__IED_downloadPopupBody';
+const __IED_downloadPopupActionID = '__IED_downloadPopupAction';
 const __IED_downloadPopupFooterID = '__IED_downloadPopupFooter';
-const __IED_downloadPopupCloseID = '__IED_downloadPopupClose';
 const __IED_downloadPopupDownloadID = '__IED_downloadPopupDownload';
+const __IED_downloadPopupReloadID = '__IED_downloadPopupReload';
+const __IED_downloadPopupCloseID = '__IED_downloadPopupClose';
 const __IED_downloadPopupID = '__IED_downloadPopup';
 
 const __IED_closePopup = () => __IED_downloadPopupWrapper.classList.remove('show');
 const __IED_showPopup = (pics, vids, icon) => {
   let totalItems = pics.length + vids.length;
-  if (totalItems <= 3) return __IED_downloadMedias(); // direct download if there are just 3 items or below
+  if (totalItems == 1) return __IED_downloadMedias(); // direct download if there are just 1 item
   __IED_downloadPopupWrapper.classList.add('show');
   let picsTitle = document.getElementById(__IED_downloadPopupPicsTitleID);
   let picsDL = document.getElementById(__IED_downloadPopupPicsDLID);
+  let picsNT = document.getElementById(__IED_downloadPopupPicsNTID);
   if (pics.length) {
+    picsDL.addEventListener('click', () => __IED_downloadMedias(pics, picsDL, true));
+    picsNT.addEventListener('click', () => __IED_downloadMedias(pics, picsNT, false));
     picsTitle.innerText = `Pictures (${pics.length})`;
-    picsTitle.style.display = 'block';
-    picsDL.addEventListener('click', () => __IED_downloadMedias(pics, picsDL));
-    picsDL.style.display = 'block';
+    picsTitle.parentElement.style.display = 'flex';
   } else {
-    picsTitle.style.display = 'none';
-    picsDL.style.display = 'none';
+    picsTitle.parentElement.style.display = 'none';
   }
   let vidsTitle = document.getElementById(__IED_downloadPopupVidsTitleID);
   let vidsDL = document.getElementById(__IED_downloadPopupVidsDLID);
+  let vidsNT = document.getElementById(__IED_downloadPopupVidsNTID);
   if (vids.length) {
     vidsTitle.innerText = `Videos (${vids.length})`;
-    vidsTitle.style.display = 'block';
-    vidsDL.addEventListener('click', () => __IED_downloadMedias(vids, vidsDL));
-    vidsDL.style.display = 'block';
+    vidsDL.addEventListener('click', () => __IED_downloadMedias(vids, vidsDL, true));
+    vidsNT.addEventListener('click', () => __IED_downloadMedias(vids, vidsNT, false));
+    vidsTitle.parentElement.style.display = 'flex';
   } else {
-    vidsTitle.style.display = 'none';
-    vidsDL.style.display = 'none';
+    vidsTitle.parentElement.style.display = 'none';
   }
   let picsContainer = document.getElementById(__IED_downloadPopupPicsID);
   let vidsContainer = document.getElementById(__IED_downloadPopupVidsID);
@@ -475,13 +485,14 @@ const __IED_showPopup = (pics, vids, icon) => {
   btnDownload.prepend(icon);
   picsContainer.innerHTML = '';
   vidsContainer.innerHTML = '';
+  let getBaseName = (url) => url.split("/").pop().split('?')[0];
   pics.forEach((url) => {
     let a = document.createElement("a");
     let img = document.createElement("img");
     img.src = url;
     a.href = url;
     a.target = '_blank';
-    a.download = url.split("/").pop();
+    a.download = getBaseName(url);
     a.appendChild(img);
     picsContainer.appendChild(a);
   });
@@ -492,38 +503,34 @@ const __IED_showPopup = (pics, vids, icon) => {
     source.src = url;
     a.href = url;
     a.target = '_blank';
-    a.download = url.split("/").pop();
+    a.download = getBaseName(url);
     video.appendChild(source);
     a.appendChild(video);
     vidsContainer.appendChild(a);
   });
 }
-// const __IED_clickIcon = () => {
-//   chrome.runtime?.sendMessage({action: 'clickIcon'}, function(response) {
-//     let error = chrome.runtime.lastError;
-//     if (error) return console.warn('[IED] clickIcon error', error.message);
-//     console.log('[IED] clickIcon response', response);
-//     if (!response.ok) {
-//       let btnDownload = document.getElementById(__IED_downloadButtonID);
-//       btnDownload.classList.add('error');
-//       setTimeout(() => {
-//         btnDownload.classList.remove('error');
-//       }, 200);
-//     }
-//   });
-// }
-const __IED_downloadMedias = (items, btn) => {
-  chrome.runtime?.sendMessage({action: 'downloadMedias', items}, function(response) {
-    let error = chrome.runtime.lastError;
-    if (error) return console.warn('[IED] downloadMedias error', error.message);
-    console.log('[IED] downloadMedias response', response);
-    if (!response.ok) {
-      btn.classList.add('error');
-      setTimeout(() => {
-        btn.classList.remove('error');
-      }, 200);
-    }
-  });
+const __IED_downloadMedias = (medias, btn, download = true) => {
+  try {
+    medias.forEach(url => {
+      const a = document.createElement("a");
+      a.href = url;
+      if (!download) a.target = '_blank';
+      a.download = url.split("/").pop().split('?')[0];
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    });
+    return true;
+  } catch(err) {
+    console.error('[IED] download media error:', err);
+    btn = btn || document.getElementById(__IED_downloadButtonID);
+    btn.classList.add('error');
+    setTimeout(() => {
+      btn.classList.remove('error');
+    }, 200);
+    return false;
+  }
 }
 const __IED_observeDOM = (function() {
   var MutationObserver = window.MutationObserver || window.WebKitMutationObserver;
@@ -553,6 +560,7 @@ const __IED_injectCSS = () => {
     background: linear-gradient(45deg, #42a661, #4bc3fd);
     box-shadow: 2px 2px 6px -4px #000;
     cursor: pointer;
+    outline: none;
   }
   .${__IED_buttonClass}:hover {
     filter: brightness(1.1);
@@ -563,6 +571,7 @@ const __IED_injectCSS = () => {
   }
   .${__IED_buttonClass} img {
     margin-right: 0.5rem !important;
+    width: 16px;
   }
   .${__IED_buttonClass} span {
     background: #00000045;
@@ -593,11 +602,11 @@ const __IED_injectCSS = () => {
   #${__IED_downloadPopupID} {
     display: flex;
     flex-direction: column;
-    background: #fff;
     border-radius: 1rem;
-    padding: 2rem;
+    padding: 1rem;
     max-width: 700px;
-    max-height: 70vh;
+    max-height: calc(100vh - 8rem);
+    background: linear-gradient(45deg, #ffffff, #d4fff7db);
     box-shadow: 0 2px 10px -7px rgba(0, 0, 0, 0);
     transform: scale(.8);
     transition: all .5s ease;
@@ -605,14 +614,32 @@ const __IED_injectCSS = () => {
   #${__IED_downloadPopupBodyID} {
     overflow-y: auto;
     flex-grow: 1;
+    padding: 0.5rem;
   }
   #${__IED_downloadPopupBodyID} button {
     filter: hue-rotate(315deg);
-    float: right;
   }
-  #${__IED_downloadPopupBodyID} h4 {
+  #${__IED_downloadPopupBodyID} button.${__IED_newTabClass} {
+    filter: hue-rotate(77deg);
+    margin-left: 0.45rem;
+  }
+  #${__IED_downloadPopupBodyID} button.${__IED_newTabClass} img {
+    margin-right: 0 !important;
+    width: 16px;
+  }
+  #${__IED_downloadPopupBodyID} .${__IED_captionClass} {
+    margin-bottom: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  #${__IED_downloadPopupBodyID} .${__IED_captionClass} div {
+    display: flex;
+    align-items: center;
+  }
+  #${__IED_downloadPopupBodyID} .${__IED_captionClass} h4 {
     font-size: 1rem;
-    margin: 0.75rem 0;
+    margin: 0 1rem 0 0;
   }
   #${__IED_downloadPopupPicsID},
   #${__IED_downloadPopupVidsID} {
@@ -633,17 +660,38 @@ const __IED_injectCSS = () => {
     transform: scale(1.05);
     filter: brightness(1.1) contrast(1) drop-shadow(0 2px 5px rgba(0,0,0,.2));
   }
-  #${__IED_downloadPopupFooterID} {
+  #${__IED_downloadPopupActionID} {
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: space-between;
     margin-top: 1rem;
   }
-  #${__IED_downloadPopupFooterID} > button {
+  #${__IED_downloadPopupActionID} > div {
+    display: flex;
+    align-items: center;
+  }
+  #${__IED_downloadPopupActionID} > div > button {
     margin: 0 .35rem;
   }
+  #${__IED_downloadPopupFooterID} {
+    margin-top: 1rem;
+    text-align: end;
+    font-size: .7rem;
+  }
+  #${__IED_downloadPopupFooterID} a {
+    font-weight: 600;
+  }
+  #${__IED_downloadPopupReloadID} {
+    filter: hue-rotate(45deg);
+  }
   #${__IED_downloadPopupCloseID} {
-    filter: grayscale(1);
+    color: #fff;
+    font-size: 13px;
+    position: absolute;
+    text-align: center;
+    bottom: 0;
+    margin: 0 0 1rem 0;
+    pointer-events: none;
   }
   #${__IED_downloadPopupWrapperID}.show {
     pointer-events: auto;
@@ -673,28 +721,52 @@ document.body.insertAdjacentHTML('beforeend', `
 <div id="${__IED_downloadPopupWrapperID}">
   <div id="${__IED_downloadPopupID}">
     <div id="${__IED_downloadPopupBodyID}">
-      <button class="${__IED_buttonClass}" id="${__IED_downloadPopupPicsDLID}">Download All</button>
-      <h4 id="${__IED_downloadPopupPicsTitleID}"></h4>
+      <div class="${__IED_captionClass}">
+        <h4 id="${__IED_downloadPopupPicsTitleID}"></h4>
+        <div>
+          <button class="${__IED_buttonClass}" id="${__IED_downloadPopupPicsDLID}">Download All</button>
+          <button class="${__IED_buttonClass} ${__IED_newTabClass}" id="${__IED_downloadPopupPicsNTID}"></button>
+        </div>
+      </div>
       <div id="${__IED_downloadPopupPicsID}"></div>
-      <button class="${__IED_buttonClass}" id="${__IED_downloadPopupVidsDLID}">Download All</button>
-      <h4 id="${__IED_downloadPopupVidsTitleID}"></h4>
+      <div class="${__IED_captionClass}">
+        <h4 id="${__IED_downloadPopupVidsTitleID}"></h4>
+        <div>
+          <button class="${__IED_buttonClass}" id="${__IED_downloadPopupVidsDLID}">Download All</button>
+          <button class="${__IED_buttonClass} ${__IED_newTabClass}" id="${__IED_downloadPopupVidsNTID}"></button>
+        </div>
+      </div>
       <div id="${__IED_downloadPopupVidsID}"></div>
     </div>
+    <div id="${__IED_downloadPopupActionID}">
+      <div>
+        Displayed wrong items?
+        <button class="${__IED_buttonClass}" id="${__IED_downloadPopupReloadID}">Reload Page</button>
+      </div>
+      <div>
+        <button class="${__IED_buttonClass}" id="${__IED_downloadPopupDownloadID}"></button>
+      </div>
+    </div>
     <div id="${__IED_downloadPopupFooterID}">
-      <button class="${__IED_buttonClass}" id="${__IED_downloadPopupDownloadID}"></button>
-      <button class="${__IED_buttonClass}" id="${__IED_downloadPopupCloseID}">Close</button>
+      Copyright &copy;2022 Taufik Nur Rahmanda - <a href="https://www.taufiknur.com/" target="_blank">Visit my Website</a>
     </div>
   </div>
+  <p id="${__IED_downloadPopupCloseID}">Click anywhere to close</p>
 </div>
 `);
 
 const __IED_downloadPopupWrapper = document.getElementById(__IED_downloadPopupWrapperID);
 const __IED_downloadPopupDownload = document.getElementById(__IED_downloadPopupDownloadID);
+const __IED_newTabIcon = chrome.runtime.getURL(`/icons/new_tab.png`);
 
 __IED_downloadPopupWrapper.addEventListener('click', __IED_closePopup);
 __IED_downloadPopupDownload.addEventListener('click', () => __IED_downloadMedias(null, __IED_downloadPopupDownload));
-document.getElementById(__IED_downloadPopupCloseID).addEventListener('click', __IED_closePopup);
+document.getElementById(__IED_downloadPopupReloadID).addEventListener('click', () => window.location.reload());
 document.getElementById(__IED_downloadPopupID).addEventListener('click', (e) => e.stopPropagation());
+document.querySelectorAll(`.${__IED_newTabClass}`).forEach((btn) => {
+  btn.innerHTML = `<img src="${__IED_newTabIcon}"/>`;
+});
+
 window.addEventListener('hashchange', function() {
   console.log("[FED] URL changed hash!", window.location.href, window.location.hash);
 });
