@@ -14,9 +14,9 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   let { action, download } = request;
   let response = {ok: true};
   switch (action) {
-    case 'clickIcon':
-      response.ok = onIconClick(download);
-      break;
+    // case 'clickIcon': // TODO unused
+    //   response.ok = onIconClick(download);
+    //   break;
     case 'escapeKey':
       if (bulkDownload == currentTab.id) stopBulkDownload();
       break;
@@ -83,13 +83,21 @@ function isURLInstagramPost(url) {
   );
 }
 
-function downloadMedias(medias, download = false) {
-  medias = medias || [...pics, ...vids];
-  console.log('[IED] download medias from', currentTab, medias);
-  chrome.tabs.sendMessage(currentTab.id, { action: 'downloadMedias', medias, download }, function(response) {
+// function downloadMedias(medias, download = false) { // TODO unused
+//   medias = medias || [...pics, ...vids];
+//   console.log('[IED] download medias from', currentTab, medias);
+//   chrome.tabs.sendMessage(currentTab.id, { action: 'downloadMedias', medias, download }, function(response) {
+//     let error = chrome.runtime.lastError;
+//     if (error) return console.log('[IED] downloadMedias error:', error.message);
+//     console.log('[IED] downloadMedias result:', response?.result);
+//   });
+// }
+
+function showPopup() {
+  chrome.tabs.sendMessage(currentTab.id, { action: 'showPopup' }, function(response) {
     let error = chrome.runtime.lastError;
-    if (error) return console.log('[IED] downloadMedias error:', error.message);
-    console.log('[IED] downloadMedias result:', response?.result);
+    if (error) return console.log('[IED] showPopup error:', error.message);
+    console.log('[IED] showPopup result:', response?.result);
   });
 }
 
@@ -108,17 +116,14 @@ function onIconClick(download = false) {
   const isInstagram = isURLInstagram(url);
 
   if (isFacebookPost || isInstagramPost || isTwitterPost) { // if it's a post page
-    downloadMedias(null, download);
-  } else if (isInstagram) { // if it's an insagram profile page
-    if (bulkDownload == currentTab.id) {
-      stopBulkDownload();
-      return;
-    }
+    // downloadMedias(null, download);
+    showPopup();
+  } else if (isInstagram) { // if it's an instagram profile page
+    if (bulkDownload == currentTab.id) return stopBulkDownload();
     chrome.tabs.sendMessage(currentTab.id, { action: 'bulkDownload' }, function(response) {
       let error = chrome.runtime.lastError;
-      if (error) {
-        console.log('[IED] bulkDownload error:', error.message);
-      } else if (response?.result) {
+      if (error) return console.log('[IED] bulkDownload error:', error.message);
+      if (response?.result) {
         bulkDownload = currentTab.id;
         analyzeTab();
       }
