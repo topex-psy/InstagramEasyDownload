@@ -1,5 +1,9 @@
+const __IED_icon = chrome.runtime.getURL(`/icons/icon24.png`);
 const __IED_iconNewTab = chrome.runtime.getURL(`/icons/new_tab.png`);
 const __IED_iconSpinner = chrome.runtime.getURL(`/icons/spinner.gif`);
+
+// const __IED_host = window.location.host.split('.').slice(-2).join('.');
+const __IED_site = window.location.host.split('.').slice(-2, -1)[0];
 
 var __IED_pics = [];
 var __IED_vids = [];
@@ -11,8 +15,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   let { action, next, category, type, observeDOM, pics, vids, medias, download } = request;
   console.log("[IED] got action:", action, request);
 
-  // let host = window.location.host.split('.').slice(-2).join('.');
-  let site = window.location.host.split('.').slice(-2, -1)[0];
+  let site = __IED_site;
   let feedContainer = document.body;
   let iconURL = chrome.runtime.getURL(`/icons/${site}_download24.png`);
 
@@ -475,23 +478,26 @@ const __IED_showPopup = (iconURL) => {
   btnDownload.querySelector('img').src = __IED_iconSpinner;
   __IED_selectedPics.length = 0;
   __IED_selectedVids.length = 0;
+
+  let photosCaption = __IED_popupPhotosTitle.closest(`.${__IED_captionClass}`);
+  let videosCaption = __IED_popupVideosTitle.closest(`.${__IED_captionClass}`);
   
   if (pics.length) {
     __IED_selectedPics = pics;
     __IED_popupPhotosDL.querySelector('span').innerText = pics.length;
     __IED_popupPhotosTitle.innerHTML = `Pictures <span>${pics.length}</span>`;
-    __IED_popupPhotosTitle.parentElement.style.display = 'flex';
+    photosCaption.style.display = 'flex';
   } else {
-    __IED_popupPhotosTitle.parentElement.style.display = 'none';
+    photosCaption.style.display = 'none';
   }
 
   if (vids.length) {
     __IED_selectedVids = vids;
     __IED_popupVideosDL.querySelector('span').innerText = vids.length;
     __IED_popupVideosTitle.innerHTML = `Videos <span>${vids.length}</span>`;
-    __IED_popupVideosTitle.parentElement.style.display = 'flex';
+    videosCaption.style.display = 'flex';
   } else {
-    __IED_popupVideosTitle.parentElement.style.display = 'none';
+    videosCaption.style.display = 'none';
   }
 
   __IED_popupDownloadAll.innerHTML = `<img src="${iconURL}"/>Download All<span>${totalItems}</span>`;
@@ -558,7 +564,7 @@ const __IED_downloadMedias = (medias, btn, download = true) => {
   try {
     medias.forEach(url => {
       const a = document.createElement("a");
-      a.href = download ? url + (url.includes('?') ? '&' : '?') + 'dl=1' : url;
+      a.href = download && __IED_site != 'twitter' ? url + (url.includes('?') ? '&' : '?') + 'dl=1' : url;
       a.target = '_blank';
       if (download) a.download = url.split("/").pop().split('?')[0];
       a.style.display = 'none';
@@ -688,6 +694,7 @@ const __IED_injectCSS = () => {
     pointer-events: none;
     opacity: 0;
     transition: opacity .3s ease;
+    font: menu;
   }
   #${__IED_downloadPopupID} {
     display: flex;
@@ -705,7 +712,8 @@ const __IED_injectCSS = () => {
     overflow-y: auto;
     flex-grow: 1;
     flex-shrink: 1;
-    padding: 12px;
+    padding: 8px;
+    padding-bottom: 0;
   }
   #${__IED_downloadPopupBodyID} button {
     filter: hue-rotate(315deg);
@@ -735,6 +743,7 @@ const __IED_injectCSS = () => {
   #${__IED_downloadPopupBodyID} .${__IED_captionClass} h4 {
     font-size: 15px;
     font-weight: 600;
+    margin: 0;
   }
   #${__IED_downloadPopupBodyID} .${__IED_captionClass} h4 span {
     background: rgba(65, 153, 152, .2);
@@ -753,7 +762,7 @@ const __IED_injectCSS = () => {
   #${__IED_downloadPopupPicsID},
   #${__IED_downloadPopupVidsID} {
     display: block;
-    margin-bottom: 1rem;
+    margin-bottom: 8px;
     line-height: 0;
   }
   #${__IED_downloadPopupPicsID} img,
@@ -812,7 +821,7 @@ const __IED_injectCSS = () => {
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    margin-top: 1rem;
+    margin-top: 12px;
   }
   #${__IED_downloadPopupActionID} > div {
     display: flex;
@@ -823,10 +832,22 @@ const __IED_injectCSS = () => {
     margin: 0 .35rem;
   }
   #${__IED_downloadPopupFooterID} {
-    display: block;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    white-space: nowrap;
     margin-top: 1rem;
-    text-align: end;
     font-size: .7rem;
+  }
+  #${__IED_downloadPopupFooterID} div {
+    display: flex;
+    align-items: center;
+    font-size: 105%;
+    font-weight: 700;
+  }
+  #${__IED_downloadPopupFooterID} div img {
+    width: 20px;
+    margin-right: 4px;
   }
   #${__IED_downloadPopupFooterID} a {
     font-weight: 600;
@@ -912,7 +933,13 @@ document.body.insertAdjacentHTML('beforeend', `
       </div>
     </div>
     <div id="${__IED_downloadPopupFooterID}">
-      Copyright &copy;2022 Taufik Nur Rahmanda - <a href="https://www.taufiknur.com/" target="_blank">Visit my Website</a>
+      <div>
+        <img src="${__IED_icon}"/>
+        Social Media Easy Download
+      </div>
+      <span>
+        Created by Taufik Nur Rahmanda - <a href="https://www.taufiknur.com/" target="_blank">Visit my Website</a>
+      </span>
     </div>
   </div>
   <p id="${__IED_downloadPopupCloseID}">Click anywhere to close</p>

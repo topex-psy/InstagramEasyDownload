@@ -41,6 +41,7 @@
   "web_accessible_resources": [
     {
       "resources": [
+        "icons/icon24.png",
         "icons/facebook_download24.png",
         "icons/instagram_download24.png",
         "icons/twitter_download24.png",
