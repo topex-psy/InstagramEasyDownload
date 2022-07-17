@@ -8,12 +8,15 @@ var inFocus = true;
 
 const fetchTimeout = 3000;
 
-chrome.action.onClicked.addListener(onIconClick);
+chrome.action.onClicked.addListener(() => onIconClick());
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   console.log("[IED] action from foreground", request, sender);
-  let { action } = request;
+  let { action, download } = request;
   let response = {ok: true};
   switch (action) {
+    case 'clickIcon':
+      response.ok = onIconClick(download);
+      break;
     case 'escapeKey':
       if (bulkDownload == currentTab.id) stopBulkDownload();
       break;
@@ -81,6 +84,7 @@ function isURLInstagramPost(url) {
 }
 
 function downloadMedias(medias, download = false) {
+  medias = medias || [...pics, ...vids];
   console.log('[IED] download medias from', currentTab, medias);
   chrome.tabs.sendMessage(currentTab.id, { action: 'downloadMedias', medias, download }, function(response) {
     let error = chrome.runtime.lastError;
@@ -88,29 +92,30 @@ function downloadMedias(medias, download = false) {
     console.log('[IED] downloadMedias result:', response?.result);
   });
 }
-function downloadAll(medias, download = false) {
-  try {
-    medias.forEach(url => {
-      const a = document.createElement("a");
-      a.href = url;
-      if (!download) a.target = '_blank';
-      a.download = url.split("/").pop().split('?')[0];
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    });
-    return true;
-  } catch(err) {
-    console.error('[IED] download media error:', err);
-    return false;
-  }
-}
+// function downloadAll(medias, download = false) {
+//   try {
+//     medias.forEach(url => {
+//       const a = document.createElement("a");
+//       a.href = url;
+//       if (!download) a.target = '_blank';
+//       a.download = url.split("/").pop().split('?')[0];
+//       a.style.display = 'none';
+//       document.body.appendChild(a);
+//       a.click();
+//       a.remove();
+//     });
+//     return true;
+//   } catch(err) {
+//     console.error('[IED] download media error:', err);
+//     return false;
+//   }
+// }
 
-function onIconClick() {
-  console.log('[IED] onIconClick', currentTab, isReady);
+function onIconClick(download = false) {
+  console.log('[IED] onIconClick tab', currentTab, isReady);
+  console.log('[IED] onIconClick direct download', download);
   if (!currentTab || !isReady) {
-    console.warn('[IED] tab not ready');
+    console.warn('[IED] tab not ready, still counting ...');
     analyzeTab();
     return false;
   }
@@ -120,9 +125,9 @@ function onIconClick() {
   const isInstagramPost = isURLInstagramPost(url);
   const isInstagram = isURLInstagram(url);
 
-  if (isFacebookPost || isInstagramPost || isTwitterPost) {
-    downloadMedias();
-  } else if (isInstagram) {
+  if (isFacebookPost || isInstagramPost || isTwitterPost) { // if it's a post page
+    downloadMedias(null, download);
+  } else if (isInstagram) { // if it's an insagram profile page
     if (bulkDownload == currentTab.id) {
       stopBulkDownload();
       return;
@@ -136,8 +141,7 @@ function onIconClick() {
         analyzeTab();
       }
     });
-  } else {
-    console.log('[IED] tab is not an instagram or tweet');
+  } else { // click action not supported in this page
     analyzeTab();
   }
   return true;
@@ -264,6 +268,7 @@ function setDownloadIcon(tab, site, category, picTotal) {
     // put download button in foreground
     putDownloadButton(tab, site, category, type);
 
+    // bulk download per post
     if (bulkDownload == tab.id) {
       onIconClick();
       chrome.tabs.sendMessage(tab.id, { action: 'nextPost' }, function(response) {

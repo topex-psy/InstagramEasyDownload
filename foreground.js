@@ -1,5 +1,5 @@
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
-  let { action, next, category, type, iconURL, observeDOM, pics, vids } = request;
+  let { action, next, category, type, iconURL, observeDOM, pics, vids, medias, download } = request;
   console.log("[IED] got action:", action, request);
 
   // let host = window.location.host.split('.').slice(-2).join('.');
@@ -510,12 +510,27 @@ const __IED_showPopup = (pics, vids, icon) => {
   });
 }
 const __IED_downloadMedias = (medias, btn, download = true) => {
+  btn = btn || document.getElementById(__IED_downloadButtonID);
+  if (!medias) {
+    chrome.runtime?.sendMessage({action: 'clickIcon', download}, function(response) {
+      let error = chrome.runtime.lastError;
+      if (error) {
+        console.log('[IED] clickIcon error', error.message);
+        __IED_buttonError(btn);
+        return false;
+      }
+      console.log('[IED] clickIcon response', response);
+    });
+    return true;
+  }
   try {
     medias.forEach(url => {
       const a = document.createElement("a");
-      a.href = url;
-      if (!download) a.target = '_blank';
-      a.download = url.split("/").pop().split('?')[0];
+      // a.href = url;
+      a.href = download ? url + (url.includes('?') ? '&' : '?') + 'dl=1' : url;
+      // if (!download) a.target = '_blank';
+      a.target = '_blank';
+      if (download) a.download = url.split("/").pop().split('?')[0];
       a.style.display = 'none';
       document.body.appendChild(a);
       a.click();
@@ -524,14 +539,15 @@ const __IED_downloadMedias = (medias, btn, download = true) => {
     return true;
   } catch(err) {
     console.error('[IED] download media error:', err);
-    btn = btn || document.getElementById(__IED_downloadButtonID);
-    btn.classList.add('error');
-    setTimeout(() => {
-      btn.classList.remove('error');
-    }, 200);
+    __IED_buttonError(btn);
     return false;
   }
 }
+const __IED_buttonError = (btn) => {
+  if (!btn) return;
+  btn.classList.add('error');
+  setTimeout(() => { btn.classList.remove('error'); }, 200);
+};
 const __IED_observeDOM = (function() {
   var MutationObserver = window.MutationObserver || window.WebKitMutationObserver;
   return function(obj, callback) {
@@ -554,7 +570,8 @@ const __IED_injectCSS = () => {
     align-items: center;
     border: 0;
     border-radius: 2rem;
-    padding: 0.45rem 1rem;
+    padding: 0.4rem 1rem;
+    font-size: 12px;
     font-weight: 600;
     color: #fff;
     background: linear-gradient(45deg, #42a661, #4bc3fd);
@@ -592,6 +609,7 @@ const __IED_injectCSS = () => {
     width: 100%;
     height: 100%;
     background: rgba(0,0,0,.5);
+    font-size: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -614,6 +632,7 @@ const __IED_injectCSS = () => {
   #${__IED_downloadPopupBodyID} {
     overflow-y: auto;
     flex-grow: 1;
+    flex-shrink: 1;
     padding: 0.5rem;
   }
   #${__IED_downloadPopupBodyID} button {
@@ -630,19 +649,25 @@ const __IED_injectCSS = () => {
   #${__IED_downloadPopupBodyID} .${__IED_captionClass} {
     margin-bottom: 1rem;
     display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
     justify-content: space-between;
     align-items: center;
+    white-space: nowrap;
   }
   #${__IED_downloadPopupBodyID} .${__IED_captionClass} div {
     display: flex;
+    flex-direction: row;
     align-items: center;
   }
   #${__IED_downloadPopupBodyID} .${__IED_captionClass} h4 {
     font-size: 1rem;
+    font-weight: 600;
     margin: 0 1rem 0 0;
   }
   #${__IED_downloadPopupPicsID},
   #${__IED_downloadPopupVidsID} {
+    display: block;
     margin-bottom: 1rem;
     line-height: 0;
   }
@@ -662,18 +687,21 @@ const __IED_injectCSS = () => {
   }
   #${__IED_downloadPopupActionID} {
     display: flex;
+    flex-direction: row;
     align-items: center;
     justify-content: space-between;
     margin-top: 1rem;
   }
   #${__IED_downloadPopupActionID} > div {
     display: flex;
+    flex-direction: row;
     align-items: center;
   }
   #${__IED_downloadPopupActionID} > div > button {
     margin: 0 .35rem;
   }
   #${__IED_downloadPopupFooterID} {
+    display: block;
     margin-top: 1rem;
     text-align: end;
     font-size: .7rem;
