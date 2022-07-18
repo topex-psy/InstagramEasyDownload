@@ -600,9 +600,9 @@ const __IED_injectCSS = () => {
     border: 0;
     border-radius: 2rem;
     padding: 6px 16px;
-    font-size: 12px;
-    font-weight: 600;
-    color: #fff;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    color: #fff !important;
     background: linear-gradient(45deg, #42a661, #4bc3fd);
     box-shadow: 2px 2px 6px -4px #000;
     cursor: pointer;
