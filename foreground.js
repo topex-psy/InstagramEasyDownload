@@ -11,7 +11,7 @@ var __IED_selectedVideos = [];
 var __IED_previousHref;
 
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
-  let { action, next, category, type, observeDOM, pics, vids } = request;
+  let { action, next, category, type, observeDOM, pics, vids, url } = request;
   console.log("[IED] got action:", action, request);
 
   switch (action) {
@@ -35,11 +35,11 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
       sendResponse({result: bulkDownload});
       break;
     case 'nextPost':
-      let button = document.querySelector('body > div[role="presentation"] > div:nth-child(2) > div > div:last-child > button');
-      let buttonLabel = button?.querySelector('svg').getAttribute('aria-label');
-      let onNext = buttonLabel == 'Next';
-      if (onNext) button.click(); else alert("Last post has been reached. Bulk download finished!");
-      sendResponse({result: onNext});
+      // __IED_downloadSelected();
+      __IED_downloadSelected(null, false); // open in new tab
+      let button = document.querySelector('div[role="dialog"] button svg[aria-label="Next"]')?.closest('button');
+      if (button != null) button.click(); else alert("Last post has been reached. Bulk download finished!");
+      sendResponse({result: button != null});
       break;
     case 'putDownloadButton':
       let isObserved = false;
@@ -206,6 +206,10 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     case 'detectMedias':
       let photos = [];
       let videos = [];
+      if (url != window.location.href) {
+        console.log(`[FED] LOOOL url is not match, ${category} detection should be stopped!`);
+        return sendResponse({url: window.location.href});
+      }
       switch (__IED_site) {
         case 'facebook':
 
@@ -554,28 +558,19 @@ const __IED_showPopup = () => {
     __IED_popupWrapper.classList.add('show');
   }, 500);
 }
-const __IED_downloadSelected = (urls, btn, download = true) => {
-  urls = urls || [...__IED_detectedPhotos, ...__IED_detectedVideos].map((media) => media.url);;
-  btn = btn || document.getElementById(__IED_downloadButtonID);
-  try {
-    urls.forEach(url => {
-      let a = document.createElement("a");
-      a.href = download && __IED_site != 'twitter' ? url + (url.includes('?') ? '&' : '?') + 'dl=1' : url;
-      a.target = '_blank';
-      // in Twitter, direct download just not working
-      if (download) a.download = url.split("/").pop().split('?')[0];
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    });
-    return true;
-  } catch(err) {
-    console.error('[IED] download urls error:', err);
-    btn.classList.add('error');
-    setTimeout(() => { btn.classList.remove('error'); }, 200);
-    return false;
-  }
+const __IED_downloadSelected = (urls, download = true) => {
+  urls = urls || [...__IED_detectedPhotos, ...__IED_detectedVideos].map((media) => media.url);
+  urls.forEach(url => {
+    let a = document.createElement("a");
+    a.href = download && __IED_site != 'twitter' ? url + (url.includes('?') ? '&' : '?') + 'dl=1' : url;
+    a.target = '_blank';
+    // in Twitter, direct download just not working
+    if (download) a.download = url.split("/").pop().split('?')[0];
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  });
 }
 const __IED_observeDOM = (function() {
   var MutationObserver = window.MutationObserver || window.WebKitMutationObserver;
@@ -957,9 +952,9 @@ document.body.insertAdjacentHTML('beforeend', `
 </div>
 `);
 
-const __IED_downloadSelectedPics = (download = true) => __IED_downloadSelected(__IED_selectedPhotos, __IED_popupPhotosDL, download);
-const __IED_downloadSelectedVids = (download = true) => __IED_downloadSelected(__IED_selectedVideos, __IED_popupVideosDL, download);
-const __IED_downloadSelectedMedia = () => __IED_downloadSelected([...__IED_selectedPhotos, ...__IED_selectedVideos], __IED_popupDownloadAll);
+const __IED_downloadSelectedPics = (download = true) => __IED_downloadSelected(__IED_selectedPhotos, download);
+const __IED_downloadSelectedVids = (download = true) => __IED_downloadSelected(__IED_selectedVideos, download);
+const __IED_downloadSelectedMedia = () => __IED_downloadSelected([...__IED_selectedPhotos, ...__IED_selectedVideos]);
 const __IED_countSelectedMedia = () => {
   let activePhotos = [...__IED_popupPhotosContainer.querySelectorAll('a.active')];
   let activeVideos = [...__IED_popupVideosContainer.querySelectorAll('a.active')];

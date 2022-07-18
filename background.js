@@ -243,12 +243,10 @@ function setDownloadIcon(tab, site, category, totalDetectedMedia) {
 
     // bulk download per post
     if (bulkDownload == tab.id) {
-      onIconClick();
       chrome.tabs.sendMessage(tab.id, { action: 'nextPost' }, function(response) {
         let error = chrome.runtime.lastError;
-        if (error) {
-          console.log('[IED] nextPost error:', error.message);
-        } else if (!response?.result) {
+        if (error) return console.log('[IED] nextPost error:', error.message);
+        if (!response?.result) {
           bulkDownload = null;
         }
       });
@@ -272,13 +270,15 @@ function putDownloadButton(tab, site, category, type, observeDOM = true, retry =
 }
 
 function detectMedia(tab, site, category = 'post', next = true) {
-  console.log(`[IED] counting media on ${site}:`, tab.url);
-  chrome.tabs.sendMessage(tab.id, { action: 'detectMedias', category, next }, function(response) {
+  const {url} = tab;
+  console.log(`[IED] counting media on ${site}:`, url);
+  chrome.tabs.sendMessage(tab.id, { action: 'detectMedias', category, next, url }, function(response) {
     let error = chrome.runtime.lastError;
     if (error) return console.log(`[IED] detectMedias ${site} error:`, error.message);
     if (response == null) return console.warn(`[IED] detectMedias got an empty response`);
     let photos = response.photos || [];
     let videos = response.videos || [];
+    let endURL = response.url || url;
     photos.forEach((media) => { pushDetectedMedia(media, pics); });
     // using DOM detection method, can only detect video poster in Twitter & Instagram
     // so hopefully the GET detection method was succeeded
@@ -287,7 +287,7 @@ function detectMedia(tab, site, category = 'post', next = true) {
     if (site == 'instagram') { // can count exact total on instagram
       totalDetectedMedia = response.total || 0;
       let detectionCount = pics.length + vids.length;
-      if ((!totalDetectedMedia || detectionCount < totalDetectedMedia)) { // detection is ongoing
+      if (url == endURL && (!totalDetectedMedia || detectionCount < totalDetectedMedia)) { // detection is ongoing
         console.log(`[IED] counting ${category} on ${site} progress: ${detectionCount}/${totalDetectedMedia}`);
         detectMedia(tab, site, category, response.canContinue ? next : !next);
       }
@@ -372,7 +372,7 @@ function fetchInstagramPost(tab) {
         console.log('[IED] read json aborted because url changed');
         return;
       }
-      console.log('[IED] read json success', JSON.stringify(data, null, 2));
+      // console.log('[IED] read json success', JSON.stringify(data, null, 2));
       if (!data.items) {
         console.warn('[IED] read json got unexpected result!');
         return;
