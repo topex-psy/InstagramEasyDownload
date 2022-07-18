@@ -69,7 +69,7 @@ function isURLTwitter(url) {
   return url && /https:\/\/twitter\.com/.test(url);
 }
 function isURLTwitterPost(url) {
-  return url && /https:\/\/twitter\.com\/[\w]+\/status\/[\w]+/.test(url);
+  return url && /https:\/\/twitter\.com\/[\w]+[\/]?[\w]+\/status\/[\w]+/.test(url);
 }
 function isURLInstagram(url) {
   return url && /https:\/\/[\w]+\.(.*)instagram\.com/.test(url); // to support domain https://www.secure.instagram.com/

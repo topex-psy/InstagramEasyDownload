@@ -115,6 +115,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
             break;
           case 'twitter':
             containers = [
+              document.querySelector('div[role="dialog"] img')?.parentElement,
               document.querySelector('article div[id][aria-labelledby]'),
               document.querySelector('article')
             ];
