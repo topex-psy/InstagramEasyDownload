@@ -335,13 +335,15 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                   videos.push(data);
                 } else {
                   if (window.location.href.includes('/watch/') || window.location.href.includes('/videos/')) continue; // there should be no photos here
-                  if (media.__typename == 'Sticker' || media.animated_image || media.massive_image) continue; // exclude stickers
+                  if (media.animated_image || media.massive_image || !!media.__typename?.match(/(sticker|icon)/ig)) continue; // exclude stickers
                   if (media.associated_paid_online_event || media.canonical_uri_with_fallback) continue; // exclude recommendations
                   if (photos.find((pic) => pic.id && pic.id == media.id)) continue; // already exists
                   let title = media.title_with_fallback || `${owner}'s Photo`;
                   let possibleImages = [media.viewer_image, media.photo_image, media.image];
                   console.log("[IED] possibleImages", possibleImages);
-                  let findLargest = possibleImages.filter((pic) => pic?.uri).sort((a,b) => a.width > b.width ? -1 : a.width < b.width ? 1 : 0);
+                  let findLargest = possibleImages
+                    .filter((pic) => pic && pic.uri && pic.width > 100 && pic.height > 100)
+                    .sort((a,b) => a.width > b.width ? -1 : a.width < b.width ? 1 : 0);
                   console.log("[IED] findLargest", findLargest);
                   if (!findLargest.length) continue;
                   let largest = findLargest[0];
@@ -661,9 +663,6 @@ const __IED_injectCSS = () => {
     background-color: CanvasText;
     clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
   }
-  .${__IED_checkboxClass}:checked::before {
-    transform: scale(1);
-  }
   .${__IED_checkboxClass}:hover {
     background-color: var(--checkbox-color-bg-hover);
   }
@@ -675,6 +674,13 @@ const __IED_injectCSS = () => {
     --checkbox-color: var(--checkbox-color-disabled);
     color: var(--checkbox-color-disabled);
     cursor: not-allowed;
+  }
+  .${__IED_checkboxClass}:checked {
+    background-color: var(--checkbox-color);
+  }
+  .${__IED_checkboxClass}:checked::before {
+    transform: scale(1);
+    box-shadow: inset 0 10px #fff;
   }
   #${__IED_popupWrapperID} {
     position: fixed;
