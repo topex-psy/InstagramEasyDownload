@@ -127,7 +127,7 @@ function generateIcons(tabId, name, suffix = '') {
     "24": "icons/" + name + suffix + "24.png",
     "32": "icons/" + name + suffix + "32.png"
   }});
-  isReady = suffix != '_counting';
+  isReady = suffix == 'download';
   console.log('[IED] isReady', isReady);
 }
 
@@ -178,14 +178,14 @@ function analyze(tab) {
   } else if (isInstagram) {
     site = 'instagram';
   } else {
-    chrome.action.setTitle({title: 'Open an Instagram or Twitter post to download its photos and video HD', tabId});
+    chrome.action.setTitle({title: 'Open a Facebook, Instagram, or Twitter post to download its photo and videos', tabId});
     chrome.action.setBadgeText({'text': ''});
     generateIcons(tabId, 'icon');
     return;
   }
 
   if (status !== "complete") {
-    chrome.action.setTitle({title: 'Loading content. Please wait ...', tabId});
+    chrome.action.setTitle({title: 'Loading contents. Please wait ...', tabId});
     chrome.action.setBadgeText({'text': ''});
     generateIcons(tabId, site);
     return;
@@ -219,7 +219,7 @@ function analyze(tab) {
     chrome.action.setTitle({title: 'Bulk download photos and videos HD in 1-click', tabId});
     chrome.action.setBadgeBackgroundColor({'color': '#333333'});
     chrome.action.setBadgeText({'text': 'All'});
-    generateIcons(tabId, site, '_download');
+    generateIcons(tabId, '', 'download');
   }
 };
 
@@ -229,10 +229,10 @@ function setDownloadIcon(tab, site, category, totalDetectedMedia) {
   if (!detectionCount) return;
   let type = pics.length && vids.length ? 'photo & video' : pics.length ? 'photo' : 'video';
   let what = `${type}${detectionCount > 1 ? 's' : ''}`;
-  chrome.action.setTitle({title: `Click to start download ${detectionCount > 1 ? 'all ' : ''}${detectionCount} ${what}`, tabId: tab.id});
+  chrome.action.setTitle({title: `Click to ${detectionCount > 1 ? 'view' : 'download'} ${detectionCount} ${site[0].toUpperCase() + site.slice(1)} ${what}`, tabId: tab.id});
   chrome.action.setBadgeBackgroundColor({'color': '#333333'});
   chrome.action.setBadgeText({'text': `${detectionCount}`});
-  generateIcons(tab.id, site, '_download');
+  generateIcons(tab.id, '', 'download');
 
   // on detection complete
   if (detectionCount == totalDetectedMedia) {

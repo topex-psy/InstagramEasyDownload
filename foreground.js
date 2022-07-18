@@ -689,7 +689,7 @@ const __IED_injectCSS = () => {
     top: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0,0,0,.69);
+    background: rgba(0,0,0,.75);
     font-size: 12px;
     display: flex;
     align-items: center;
@@ -841,6 +841,7 @@ const __IED_injectCSS = () => {
   }
   #${__IED_popupFooterID} {
     display: flex;
+    flex-direction: row;
     justify-content: space-between;
     align-items: center;
     white-space: nowrap;
@@ -849,6 +850,7 @@ const __IED_injectCSS = () => {
   }
   #${__IED_popupFooterID} div {
     display: flex;
+    flex-direction: row;
     align-items: center;
     font-size: 105%;
     font-weight: 700;
@@ -881,7 +883,7 @@ const __IED_injectCSS = () => {
     opacity: 1;
   }
   #${__IED_popupWrapperID}.show #${__IED_popupID} {
-    box-shadow: 0 2px 20px -7px rgba(0, 0, 0, .69);
+    box-shadow: 0 2px 20px -7px #00000063, 0 2px 150px -7px #0000008c;
     transform: scale(1);
   }
   #${__IED_downloadButtonID} {
