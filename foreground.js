@@ -11,17 +11,13 @@ var __IED_selectedVideos = [];
 var __IED_previousHref;
 
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
-  let { action, next, category, type, observeDOM, pics, vids, medias, download } = request;
+  let { action, next, category, type, observeDOM, pics, vids } = request;
   console.log("[IED] got action:", action, request);
 
   switch (action) {
     case 'showPopup':
       __IED_showPopup();
       sendResponse({result: true});
-      break;
-    case 'downloadMedias':
-      let downloadResult = __IED_downloadMedias(medias, null, download);
-      sendResponse({result: downloadResult});
       break;
     case 'bulkDownload':
       let bulkDownload = false;
@@ -215,7 +211,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
           // get page source
           let source = new XMLSerializer().serializeToString(document.body);
           console.info("[FED] source OK!", category);
-          console.log('[FED] source:', source);
+          // console.log('[FED] source:', source);
           let fixURL = (url) => url?.replaceAll('&amp;', '&').replaceAll('\\','');
           let strIndexes = (find) => {
             if (!source) return [];
@@ -248,15 +244,17 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                       id: media.id,
                       height: media.original_height,
                       width: media.original_width,
-                      url: media.permalink_url,
+                      permalink: media.permalink_url,
                       hd: fixURL(media.playable_url_quality_hd),
                       sd: fixURL(media.playable_url),
                       thumbnail: fixURL(media.preferred_thumbnail?.image.uri),
                       title: `${title} ${new Date().toISOString().substring(0, 10)}`,
+                      owner,
                     };
-                    console.log("[IED] GOT A VIDEO STORY", media, JSON.stringify(data, null, 2));
+                    console.log("[IED] GOT A FACEBOOK VIDEO STORY", media, JSON.stringify(data, null, 2));
                     videos.push(data);
                   } else {
+                    let title = `${owner}'s Photo Story`;
                     let data = {
                       id: media.id,
                       height: media.image.height,
@@ -264,9 +262,10 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                       hd: fixURL(media.image.uri),
                       sd: fixURL(media.previewImage.uri),
                       thumbnail: fixURL(media.previewImage.uri),
-                      title: `${owner}'s Photo Story ${new Date().toISOString().substring(0, 10)}`,
+                      title: `${title} ${new Date().toISOString().substring(0, 10)}`,
+                      owner,
                     };
-                    console.log("[IED] GOT A PHOTO STORY", media, JSON.stringify(data, null, 2));
+                    console.log("[IED] GOT A FACEBOOK PHOTO STORY", media, JSON.stringify(data, null, 2));
                     photos.push(data);
                   }
                 }
@@ -274,9 +273,9 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
             }
             break;
             default: {
-              // let titlePrefix = `"color_ranges":[],"text":"`;
-              // let title = source.substring(source.indexOf(titlePrefix) + titlePrefix.length).split('"')[0];
-              // console.info("[FED] media title:", title);
+              let possibleTitlePrefix = `"color_ranges":[],"text":"`;
+              let possibleTitle = source.substring(source.indexOf(possibleTitlePrefix) + possibleTitlePrefix.length).split('"')[0];
+              console.info("[FED] possible media title:", possibleTitle);
               let findIndexes = [
                 ...strIndexes('"playable_url":'),
                 ...strIndexes('"viewer_image":'),
@@ -307,17 +306,14 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                   else if (findEnd == '}') findEndRemaining--;
                 }
                 let mediaSource = source.substring(findStartIndex, findEndIndex + 1);
-                // console.log('[FED] media source:', mediaSource);
                 let media;
                 try {
                   media = JSON.parse(mediaSource);
-                  // console.log('[FED] parsed json', media);
                 } catch(e) {
-                  // console.log('[FED] full source', source);
                   console.error('[FED] json malformatted', e);
                   break;
                 }
-                let owner = media.owner?.name || media.video_target_entity?.name || document.title.split(' - ')[0];
+                let owner = media.owner?.name || media.video_target_entity?.name || document.title.split(' - ')[0].split(' | ')[0];
                 if (media.playable_url) {
                   if (media.animated_image) continue; // exclude stickers
                   if (videos.find((vid) => vid.id && vid.id == media.id)) continue;
@@ -326,15 +322,16 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                     id: media.id,
                     height: media.original_height,
                     width: media.original_width,
-                    url: media.permalink_url,
+                    permalink: media.permalink_url,
                     duration: media.playable_duration_in_ms,
                     sd: fixURL(media.playable_url),
                     hd: fixURL(media.playable_url_quality_hd),
-                    thumbnail: fixURL(media.preferred_thumbnail?.image.uri),
-                    thumbnail2: fixURL(media.thumbnailImage?.uri),
+                    thumbnail: fixURL(media.thumbnailImage?.uri || media.preferred_thumbnail?.image.uri),
                     title,
+                    possibleTitle,
+                    owner,
                   };
-                  console.log("[IED] GOT A VIDEO MEDIA", media, JSON.stringify(data, null, 2));
+                  console.log("[IED] GOT A FACEBOOK VIDEO", media, JSON.stringify(data, null, 2));
                   videos.push(data);
                 } else {
                   if (window.location.href.includes('/watch/') || window.location.href.includes('/videos/')) continue; // there should be no photos here
@@ -353,13 +350,15 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                     id: media.id,
                     width: largest.width,
                     height: largest.height,
-                    url: media.url,
+                    permalink: media.url,
                     hd: fixURL(largest.uri),
                     sd: fixURL(medium.uri),
                     thumbnail: fixURL(medium.uri),
                     title,
+                    possibleTitle,
+                    owner,
                   };
-                  console.log("[IED] GOT A PHOTO MEDIA", media, JSON.stringify(data, null, 2));
+                  console.log("[IED] GOT A FACEBOOK PHOTO", media, JSON.stringify(data, null, 2));
                   photos.push(data);
                 }
               }
@@ -368,20 +367,28 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
           sendResponse({photos, videos});
           break;
         case 'twitter':
-          let thumbnails = document.querySelectorAll('article a[href*="/photo/"]');
-          thumbnails.forEach((a) => {
-            let thumbSrc = a.querySelector('img')?.src;
+          let findVideos = document.querySelectorAll('article video');
+          let findPhotos = document.querySelectorAll('article a[href*="/photo/"]');
+          findPhotos.forEach((a) => {
+            let thumbImage = a.querySelector('img');
+            let thumbSrc = thumbImage?.src;
             if (thumbSrc) {
               let thumbSize = thumbSrc.split('name=').pop().split('&')[0];
-              photos.push(thumbSrc.replace(`name=${thumbSize}`,'name=large'));
+              let data = {
+                hd: thumbSrc.replace(`name=${thumbSize}`,'name=large'),
+                sd: thumbSrc.replace(`name=${thumbSize}`,'name=medium'),
+                thumbnail: thumbSrc.replace(`name=${thumbSize}`,'name=small'),
+              };
+              console.log("[IED] GOT A TWITTER PHOTO", thumbImage, JSON.stringify(data, null, 2));
+              photos.push(data);
             }
           });
-          document.querySelectorAll('article video').forEach((v) => {
-            videos.push(v.poster);
+          findVideos.forEach((v) => {
+            let data = {thumbnail: v.poster};
+            console.log("[IED] GOT A TWITTER VIDEO", v, JSON.stringify(data, null, 2));
+            videos.push(data);
           });
-          console.log("[IED] got photos:", photos);
-          console.log("[IED] got videos:", videos);
-          sendResponse({photos, videos, total: thumbnails.length});
+          sendResponse({photos, videos});
           break;
         case 'instagram':
           let images = document.querySelectorAll('article[role="presentation"] div[role="presentation"] img[src]');
@@ -389,16 +396,11 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
           if (!images.length) images = [document.querySelector('article[role="presentation"] img[src]')];
 
           images.forEach(img => {
-            // if (img.hasAttribute('srcset')) {
-            //   let srcset = img.getAttribute('srcset');
-            //   let src = srcset.split(' ')[0];
-            //   photos.push(src);
-            // } else {
-              if (!!img && !img.src.includes('_s150x150')) { // abaikan foto profil
-                console.log("[IED] push pic url:", img.src, img.src.includes('.mp4'));
-                photos.push(img.src); // exclude ?stp=dst-jpg_s150x150
-              }
-            // }
+            if (!!img && !img.src.includes('_s150x150')) { // abaikan foto profil
+              let data = {hd: img.src};
+              console.log("[IED] GOT AN INSTAGRAM PHOTO", img, JSON.stringify(data, null, 2));
+              photos.push(data);
+            }
           });
 
           let btnNext = document.querySelector('button[aria-label="Next"]');
@@ -415,15 +417,6 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
           //     break;
           //   }
           // }
-
-          // console.log('[IED] pics.length', pics.length);
-          // console.log('[IED] dotCount', dotCount);
-          // console.log('[IED] next', next);
-          // console.log('[IED] btnToPress', btnToPress);
-          // console.log('[IED] canContinue', !!btnToPress);
-          // console.log('[IED] btnNext', btnNext);
-          // console.log('[IED] btnPrev', btnPrev);
-          // if (pics.length != dotCount) btnToPress?.click();
           btnToPress?.click();
           sendResponse({
             photos,
@@ -474,10 +467,8 @@ const __IED_popupID = '__IED_popup';
 
 const __IED_closePopup = () => __IED_popupWrapper.classList.remove('show');
 const __IED_showPopup = () => {
-  let pics = [...__IED_detectedPhotos];
-  let vids = [...__IED_detectedVideos];
-  let totalItems = pics.length + vids.length;
-  if (totalItems == 1) return __IED_downloadMedias(); // direct download if there are just 1 item
+  let totalItems = __IED_detectedPhotos.length + __IED_detectedVideos.length;
+  if (totalItems == 1) return __IED_downloadSelected(); // direct download if there are just 1 item
   let btnDownload = document.getElementById(__IED_downloadButtonID);
   btnDownload.classList.add('loading');
   btnDownload.querySelector('img').src = __IED_iconSpinner;
@@ -487,19 +478,19 @@ const __IED_showPopup = () => {
   let photosCaption = __IED_popupPhotosTitle.closest(`.${__IED_captionClass}`);
   let videosCaption = __IED_popupVideosTitle.closest(`.${__IED_captionClass}`);
   
-  if (pics.length) {
-    __IED_selectedPhotos = pics;
-    __IED_popupPhotosDL.querySelector('span').innerText = pics.length;
-    __IED_popupPhotosTitle.innerHTML = `Pictures <span>${pics.length}</span>`;
+  if (__IED_detectedPhotos.length) {
+    __IED_selectedPhotos = __IED_detectedPhotos.map((media) => media.url);
+    __IED_popupPhotosDL.querySelector('span').innerText = __IED_detectedPhotos.length;
+    __IED_popupPhotosTitle.innerHTML = `Pictures <span>${__IED_detectedPhotos.length}</span>`;
     photosCaption.style.display = 'flex';
   } else {
     photosCaption.style.display = 'none';
   }
 
-  if (vids.length) {
-    __IED_selectedVideos = vids;
-    __IED_popupVideosDL.querySelector('span').innerText = vids.length;
-    __IED_popupVideosTitle.innerHTML = `Videos <span>${vids.length}</span>`;
+  if (__IED_detectedVideos.length) {
+    __IED_selectedVideos = __IED_detectedVideos.map((media) => media.url);
+    __IED_popupVideosDL.querySelector('span').innerText = __IED_detectedVideos.length;
+    __IED_popupVideosTitle.innerHTML = `Videos <span>${__IED_detectedVideos.length}</span>`;
     videosCaption.style.display = 'flex';
   } else {
     videosCaption.style.display = 'none';
@@ -510,23 +501,31 @@ const __IED_showPopup = () => {
   __IED_popupVideosContainer.innerHTML = '';
 
   let getBaseName = (url) => url.split("/").pop().split('?')[0];
-  let createLink = (category, url) => {
-    let media;
+  let createLink = (category, media) => {
+    let url = media.url;
+    let node;
     if (category == 'photo') {
-      media = document.createElement("img");
-      media.src = url;
+      let thumbnail = media.thumbnail || media.sd || media.hd;
+      node = document.createElement("img");
+      node.src = thumbnail;
     } else {
-      let source = document.createElement("source");
-      source.src = url;
-      media = document.createElement("video");
-      media.appendChild(source);
+      let thumbnail = media.thumbnail;
+      if (thumbnail) {
+        node = document.createElement("img");
+        node.src = thumbnail;
+      } else {
+        let source = document.createElement("source");
+        source.src = media.sd || media.hd;
+        node = document.createElement("video");
+        node.appendChild(source);
+      }
     }
     let a = document.createElement("a");
     a.href = url;
     a.target = '_blank';
     a.download = getBaseName(url);
     a.className = 'active';
-    a.appendChild(media);
+    a.appendChild(node);
     a.addEventListener('click', (e) => {
       e.preventDefault();
       let a = e.currentTarget;
@@ -539,11 +538,11 @@ const __IED_showPopup = () => {
     });
     return a;
   };
-  pics.forEach((url) => {
-    __IED_popupPhotosContainer.appendChild(createLink('photo', url));
+  __IED_detectedPhotos.forEach((media) => {
+    __IED_popupPhotosContainer.appendChild(createLink('photo', media));
   });
-  vids.forEach((url) => {
-    __IED_popupVideosContainer.appendChild(createLink('video', url));
+  __IED_detectedVideos.forEach((media) => {
+    __IED_popupVideosContainer.appendChild(createLink('video', media));
   });
 
   setTimeout(() => {
@@ -552,26 +551,15 @@ const __IED_showPopup = () => {
     __IED_popupWrapper.classList.add('show');
   }, 500);
 }
-const __IED_downloadMedias = (medias, btn, download = true) => {
-  medias = medias || [...__IED_detectedPhotos, ...__IED_detectedVideos];
+const __IED_downloadSelected = (urls, btn, download = true) => {
+  urls = urls || [...__IED_detectedPhotos, ...__IED_detectedVideos].map((media) => media.url);;
   btn = btn || document.getElementById(__IED_downloadButtonID);
-  // if (!medias) {
-  //   chrome.runtime?.sendMessage({action: 'clickIcon', download}, function(response) {
-  //     let error = chrome.runtime.lastError;
-  //     if (error) {
-  //       console.log('[IED] clickIcon error', error.message);
-  //       __IED_buttonError(btn);
-  //       return false;
-  //     }
-  //     console.log('[IED] clickIcon response', response);
-  //   });
-  //   return true;
-  // }
   try {
-    medias.forEach(url => {
-      const a = document.createElement("a");
+    urls.forEach(url => {
+      let a = document.createElement("a");
       a.href = download && __IED_site != 'twitter' ? url + (url.includes('?') ? '&' : '?') + 'dl=1' : url;
       a.target = '_blank';
+      // in Twitter, direct download just not working
       if (download) a.download = url.split("/").pop().split('?')[0];
       a.style.display = 'none';
       document.body.appendChild(a);
@@ -580,18 +568,12 @@ const __IED_downloadMedias = (medias, btn, download = true) => {
     });
     return true;
   } catch(err) {
-    console.error('[IED] download media error:', err);
-    // __IED_buttonError(btn);
+    console.error('[IED] download urls error:', err);
     btn.classList.add('error');
     setTimeout(() => { btn.classList.remove('error'); }, 200);
     return false;
   }
 }
-// const __IED_buttonError = (btn) => {
-//   if (!btn) return;
-//   btn.classList.add('error');
-//   setTimeout(() => { btn.classList.remove('error'); }, 200);
-// };
 const __IED_observeDOM = (function() {
   var MutationObserver = window.MutationObserver || window.WebKitMutationObserver;
   return function(obj, callback) {
@@ -611,7 +593,7 @@ const __IED_injectCSS = () => {
   css.innerHTML = `
   :root {
     --checkbox-color: #49c59f;
-    --checkbox-color-bg-hover: #acfdff;
+    --checkbox-color-bg-hover: #d9fff1;
     --checkbox-color-disabled: #ddd;
   }
   .${__IED_buttonClass} {
@@ -636,7 +618,8 @@ const __IED_injectCSS = () => {
     transform: scale(.95);
   }
   .${__IED_buttonClass} img {
-    margin-right: 0.5rem !important;
+    margin-right: 8px !important;
+    margin-left: -1px !important;
     width: 16px;
   }
   .${__IED_buttonClass} span {
@@ -781,6 +764,7 @@ const __IED_injectCSS = () => {
     line-height: 0;
   }
   #${__IED_popupPhotosContainerID} img,
+  #${__IED_popupVideosContainerID} img,
   #${__IED_popupVideosContainerID} video {
     height: 120px;
     border-radius: 0.5rem;
@@ -788,6 +772,7 @@ const __IED_injectCSS = () => {
     transition: all .2s ease-out;
   }
   #${__IED_popupPhotosContainerID} img:hover,
+  #${__IED_popupVideosContainerID} img:hover,
   #${__IED_popupVideosContainerID} video:hover {
     transform: scale(1.05);
     filter: brightness(1.1) contrast(1) drop-shadow(0 2px 5px rgba(0,0,0,.2));
@@ -827,6 +812,7 @@ const __IED_injectCSS = () => {
     transform: scale(1);
   }
   #${__IED_popupPhotosContainerID} a.active img,
+  #${__IED_popupVideosContainerID} a.active img,
   #${__IED_popupVideosContainerID} a.active video {
     outline: 3px solid #31a97cd1;
     transform: scale(1.02);
@@ -859,6 +845,7 @@ const __IED_injectCSS = () => {
     align-items: center;
     font-size: 105%;
     font-weight: 700;
+    margin-right: 12px;
   }
   #${__IED_popupFooterID} div img {
     width: 20px;
@@ -961,9 +948,9 @@ document.body.insertAdjacentHTML('beforeend', `
 </div>
 `);
 
-const __IED_downloadSelectedPics = (download = true) => __IED_downloadMedias(__IED_selectedPhotos, __IED_popupPhotosDL, download);
-const __IED_downloadSelectedVids = (download = true) => __IED_downloadMedias(__IED_selectedVideos, __IED_popupVideosDL, download);
-const __IED_downloadSelectedMedia = () => __IED_downloadMedias([...__IED_selectedPhotos, ...__IED_selectedVideos], __IED_popupDownloadAll);
+const __IED_downloadSelectedPics = (download = true) => __IED_downloadSelected(__IED_selectedPhotos, __IED_popupPhotosDL, download);
+const __IED_downloadSelectedVids = (download = true) => __IED_downloadSelected(__IED_selectedVideos, __IED_popupVideosDL, download);
+const __IED_downloadSelectedMedia = () => __IED_downloadSelected([...__IED_selectedPhotos, ...__IED_selectedVideos], __IED_popupDownloadAll);
 const __IED_countSelectedMedia = () => {
   let activePhotos = [...__IED_popupPhotosContainer.querySelectorAll('a.active')];
   let activeVideos = [...__IED_popupVideosContainer.querySelectorAll('a.active')];

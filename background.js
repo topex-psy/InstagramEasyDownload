@@ -8,15 +8,12 @@ var inFocus = true;
 
 const fetchTimeout = 3000;
 
-chrome.action.onClicked.addListener(() => onIconClick());
+chrome.action.onClicked.addListener(onIconClick);
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   console.log("[IED] action from foreground", request, sender);
-  let { action, download } = request;
+  let { action } = request;
   let response = {ok: true};
   switch (action) {
-    // case 'clickIcon': // TODO unused
-    //   response.ok = onIconClick(download);
-    //   break;
     case 'escapeKey':
       if (bulkDownload == currentTab.id) stopBulkDownload();
       break;
@@ -83,16 +80,6 @@ function isURLInstagramPost(url) {
   );
 }
 
-// function downloadMedias(medias, download = false) { // TODO unused
-//   medias = medias || [...pics, ...vids];
-//   console.log('[IED] download medias from', currentTab, medias);
-//   chrome.tabs.sendMessage(currentTab.id, { action: 'downloadMedias', medias, download }, function(response) {
-//     let error = chrome.runtime.lastError;
-//     if (error) return console.log('[IED] downloadMedias error:', error.message);
-//     console.log('[IED] downloadMedias result:', response?.result);
-//   });
-// }
-
 function showPopup() {
   chrome.tabs.sendMessage(currentTab.id, { action: 'showPopup' }, function(response) {
     let error = chrome.runtime.lastError;
@@ -101,9 +88,8 @@ function showPopup() {
   });
 }
 
-function onIconClick(download = false) {
+function onIconClick() {
   console.log('[IED] onIconClick tab', currentTab, isReady);
-  console.log('[IED] onIconClick direct download', download);
   if (!currentTab || !isReady) {
     console.warn('[IED] tab not ready, still counting ...');
     analyzeTab();
@@ -116,7 +102,6 @@ function onIconClick(download = false) {
   const isInstagram = isURLInstagram(url);
 
   if (isFacebookPost || isInstagramPost || isTwitterPost) { // if it's a post page
-    // downloadMedias(null, download);
     showPopup();
   } else if (isInstagram) { // if it's an instagram profile page
     if (bulkDownload == currentTab.id) return stopBulkDownload();
@@ -208,14 +193,14 @@ function analyze(tab) {
   console.log("[IED] load tab complete");
 
   if (isFacebookPost) {
-    setTimeout(() => {
+    setTimeout(() => { // need to be delayed until the dynamic contents loaded in DOM
       detectMedia(tab, site, isFacebookVideo ? 'video' : isFacebookStory ? 'story' : 'photo');
     }, 1000);
     chrome.action.setTitle({title: 'Counting Facebook photos and videos ...', tabId});
     chrome.action.setBadgeText({'text': ''});
     generateIcons(tabId, site, '_counting');
   } else if (isTwitterPost) {
-    detectMedia(tab, site);
+    fetchTwitterPost(tab);
     chrome.action.setTitle({title: 'Counting Twitter photos and videos ...', tabId});
     chrome.action.setBadgeText({'text': ''});
     generateIcons(tabId, site, '_counting');
@@ -237,19 +222,19 @@ function analyze(tab) {
   }
 };
 
-function setDownloadIcon(tab, site, category, picTotal) {
-  let picCount = pics.length + vids.length;
-  console.log("[IED] detection count", picCount, '/', picTotal);
-  if (!picCount) return;
+function setDownloadIcon(tab, site, category, totalDetectedMedia) {
+  let detectionCount = pics.length + vids.length;
+  console.log("[IED] detection count", detectionCount, '/', totalDetectedMedia);
+  if (!detectionCount) return;
   let type = pics.length && vids.length ? 'photo & video' : pics.length ? 'photo' : 'video';
-  let what = `${type}${picCount > 1 ? 's' : ''}`;
-  chrome.action.setTitle({title: `Click to start download ${picCount > 1 ? 'all ' : ''}${picCount} ${what}`, tabId: tab.id});
+  let what = `${type}${detectionCount > 1 ? 's' : ''}`;
+  chrome.action.setTitle({title: `Click to start download ${detectionCount > 1 ? 'all ' : ''}${detectionCount} ${what}`, tabId: tab.id});
   chrome.action.setBadgeBackgroundColor({'color': '#333333'});
-  chrome.action.setBadgeText({'text': `${picCount}`});
+  chrome.action.setBadgeText({'text': `${detectionCount}`});
   generateIcons(tab.id, site, '_download');
 
   // on detection complete
-  if (picCount == picTotal) {
+  if (detectionCount == totalDetectedMedia) {
     console.log("[IED] detection completed!");
 
     // put download button in foreground
@@ -291,56 +276,89 @@ function detectMedia(tab, site, category = 'post', next = true) {
     let error = chrome.runtime.lastError;
     if (error) return console.log(`[IED] detectMedias ${site} error:`, error.message);
     if (response == null) return console.warn(`[IED] detectMedias got an empty response`);
-    let picTotal = response.total || 0;
     let photos = response.photos || [];
     let videos = response.videos || [];
-    if (site == 'facebook') {
-      photos.forEach((media) => { pushPic(media.hd || media.sd); });
-      videos.forEach((media) => { pushPic(media.hd || media.sd, 'video'); });
-      picTotal = pics.length + vids.length;
-    } else {
-      photos.forEach((pic) => { pushPic(pic); });
+    photos.forEach((media) => { pushDetectedMedia(media, pics); });
+    // using DOM detection method, can only detect video poster in Twitter & Instagram
+    // so hopefully the GET detection method was succeeded
+    videos.forEach((media) => { pushDetectedMedia(media, vids); });
+    let totalDetectedMedia = pics.length + vids.length;
+    if (site == 'instagram') { // can count exact total on instagram
+      totalDetectedMedia = response.total || 0;
+      let detectionCount = pics.length + vids.length;
+      if ((!totalDetectedMedia || detectionCount < totalDetectedMedia)) { // detection is ongoing
+        console.log(`[IED] counting ${category} on ${site} progress: ${detectionCount}/${totalDetectedMedia}`);
+        detectMedia(tab, site, category, response.canContinue ? next : !next);
+      }
+    } else if (!totalDetectedMedia) {
+      // TODO need to retry?
     }
-    let detectionCount = pics.length + vids.length;
-    setDownloadIcon(tab, site, category, picTotal);
-    if (site != 'facebook' && (!picTotal || detectionCount < picTotal)) { // detection is ongoing
-      console.log(`[IED] counting ${category} on ${site} progress: ${detectionCount}/${picTotal}`);
-      detectMedia(tab, site, category, response.canContinue ? next : !next);
-    } else if (site == 'twitter' && videos.length) { // fetch twitter videos
-      fetchTwitterVideo(tab);
-    }
+    setDownloadIcon(tab, site, category, totalDetectedMedia);
   });
 }
 
-function pushPic(url, type = 'photo') {
+function pushDetectedMedia(media, arr) {
+  let url = media.hd || media.sd;
   if (!url) return;
-  if (type == 'photo') {
-    if (!pics.includes(url) && !pics.map((pic) => pic.split('?')[0]).includes(url.split('?')[0])) pics.push(url);
-  } else {
-    if (!vids.includes(url) && !vids.map((pic) => pic.split('?')[0]).includes(url.split('?')[0])) vids.push(url);
-  }
+  if (
+    !arr.map((item) => item.url).includes(url) &&
+    !arr.map((item) => item.url.split('?')[0]).includes(url.split('?')[0])
+  ) arr.push({...media, url});
 }
 
-function fetchTwitterVideo(tab) {
+function fetchTwitterPost(tab) {
+  // photo: https://cdn.syndication.twimg.com/tweet?id=1510768091047014400
+  // video: https://cdn.syndication.twimg.com/tweet?id=1493602413508706304
   let statusID = tab.url.split('/status/').pop().split('/')[0];
   let fetchUrl = `https://cdn.syndication.twimg.com/tweet?id=${statusID}`;
   console.log(`[IED] should fetch:`, fetchUrl);
   fetchWithTimeout(fetchUrl, { timeout: 60000 }).then(data => {
     console.log(`[IED] fetch result:`, data);
-    let variants = data.video?.variants.filter((variant) => variant.type == "video/mp4") || [];
-    let largest, lastSize = 0;
-    variants.forEach((variant) => {
-      let size = variant.src.split('/vid/').pop().split('x')[0];
-      if (size > lastSize) largest = variant;
-      lastSize = size;
-    });
-    if (!!largest) {
-      console.log(`[IED] largest video url:`, largest.src);
-      pushPic(largest.src, 'video');
-      setDownloadIcon(tab, 'twitter', 'post', pics.length + vids.length);
+    let findVideos = data.video?.variants.filter((variant) => variant.type == "video/mp4") || [];
+    let findPhotos = data.photos || [];
+    let owner = data.user?.name;
+    let title = owner ? `${owner}'s Video` : data.text;
+    // if (!findVideos.length && !findPhotos.length) return;
+    if (findVideos.length) {
+      let findLargest = findVideos.sort((a,b) => {
+        let widthA = a.src.split('/vid/').pop().split('x')[0];
+        let widthB = b.src.split('/vid/').pop().split('x')[0];
+        return widthA > widthB ? -1 : widthA < widthB ? 1 : 0;
+      });
+      let hd = findLargest[0].src;
+      let sd = findLargest.length > 1 ? findLargest[1].src : hd;
+      let item = {
+        id: statusID,
+        hd,
+        sd,
+        thumbnail: data.video?.poster,
+        duration: data.video?.durationMs,
+        permalink: data.entities?.media[0].expanded_url,
+        owner,
+        title,
+      };
+      console.log("[IED] GOT A TWITTER VIDEO", data.video, JSON.stringify(item, null, 2));
+      pushDetectedMedia(item, vids);
+    } else if (findPhotos.length) {
+      findPhotos.forEach((photo) => {
+        let item = {
+          sd: photo.url,
+          hd: photo.url.split('.').slice(0, -1).join('.') + '?format=png&name=large',
+          permalink: photo.expandedUrl,
+          width: photo.width,
+          height: photo.height,
+        }
+        console.log("[IED] GOT A TWITTER PHOTO", photo, JSON.stringify(item, null, 2));
+        pushDetectedMedia(item, pics);
+      });
     }
+    setDownloadIcon(tab, 'twitter', 'post', pics.length + vids.length);
   }).catch(err => {
-    console.warn(`[IED] couldn't fetch twitter video`, err, typeof err);
+    console.warn(`[IED] couldn't fetch twitter post`, err, typeof err);
+    setTimeout(() => {
+      // will detect from DOM, here we not be able to get the videos, only photos & video posters
+      detectMedia(tab, 'twitter');
+    }, 1000);
   });
 
 }
@@ -362,37 +380,65 @@ function fetchInstagramPost(tab) {
       let videoVersions = data.items[0].video_versions;
       let carouselMedia = data.items[0].carousel_media;
       if (carouselMedia) {
-        let imageUrl, videoUrl;
         carouselMedia.forEach((media) => {
-          imageUrl = media.image_versions2.candidates[0].url;
-          videoUrl = media.video_versions ? media.video_versions[0].url : null;
-          if (videoUrl) pushPic(videoUrl, 'video');
-          else if (imageUrl) pushPic(imageUrl);
+          console.log("[IED] carouselMedia", media);
+          let mediaPhoto = media.image_versions2.candidates[0];
+          let mediaVideo = media.video_versions ? media.video_versions[0] : null;
+          let imageUrl = mediaPhoto.url;
+          let videoUrl = mediaVideo?.url;
+          if (videoUrl) {
+            let data = {
+              id: mediaVideo?.id,
+              width: mediaVideo?.width,
+              height: mediaVideo?.height,
+              hd: videoUrl,
+            };
+            console.log("[IED] GOT A INSTAGRAM VIDEO", mediaVideo, JSON.stringify(data, null, 2));
+            pushDetectedMedia(data, vids);
+          } else if (imageUrl) {
+            let data = {
+              width: mediaPhoto.width,
+              height: mediaPhoto.height,
+              hd: imageUrl,
+            };
+            console.log("[IED] GOT A INSTAGRAM PHOTO", mediaPhoto, JSON.stringify(data, null, 2));
+            pushDetectedMedia(data, pics);
+          }
         });
         setDownloadIcon(tab, 'instagram', 'post', carouselMedia.length);
       } else if (videoVersions) {
-        let videoUrl = videoVersions[0].url;
+        let mediaVideo = videoVersions[0];
+        let videoUrl = mediaVideo.url;
         if (videoUrl) {
-          pushPic(videoUrl, 'video');
+          let data = {
+            id: mediaVideo.id,
+            width: mediaVideo.width,
+            height: mediaVideo.height,
+            hd: videoUrl,
+          };
+          console.log("[IED] GOT A INSTAGRAM VIDEO", mediaVideo, JSON.stringify(data, null, 2));
+          pushDetectedMedia(data, vids);
           setDownloadIcon(tab, 'instagram', 'post', 1);
         }
       } else if (imageVersions) {
-        let imageUrl = imageVersions.candidates[0].url;
+        let mediaPhoto = imageVersions.candidates[0];
+        let imageUrl = mediaPhoto.url;
         if (imageUrl) {
-          pushPic(imageUrl);
+          let data = {
+            width: mediaPhoto.width,
+            height: mediaPhoto.height,
+            hd: imageUrl,
+          };
+          console.log("[IED] GOT A INSTAGRAM PHOTO", mediaPhoto, JSON.stringify(data, null, 2));
+          pushDetectedMedia(data, pics);
           setDownloadIcon(tab, 'instagram', 'post', 1);
         }
       }
     });
   }).catch(err => {
-    // TODO FIXME read json got this: https://www.instagram.com/p/CdCRRjvBZS5/?__a=1
-    // read json success {
-    //   "message": "",
-    //   "spam": true,
-    //   "status": "fail"
-    // }
     console.warn('[IED] read json error', err, typeof err);
     setTimeout(() => {
+      // will detect from DOM, here we not be able to get the videos, only photos & video posters
       detectMedia(tab, 'instagram');
     }, 1000);
   });
