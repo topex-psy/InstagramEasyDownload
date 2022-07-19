@@ -8,6 +8,7 @@ const btnBulkStop = document.getElementById("btn-bulk-stop");
 const btnDownload = document.getElementById("btn-download");
 const btnDownloadAll = document.getElementById("btn-download-all");
 const btnCloseTabs = document.getElementById("btn-close-tabs");
+const btnRecheck = document.getElementById("btn-recheck");
 
 var mediaTabs = [];
 
@@ -36,6 +37,10 @@ btnCloseTabs.addEventListener('click', e => {
   });
   mediaTabs.length = 0;
   window.close();
+});
+btnRecheck.addEventListener('click', () => {
+  body.classList.add('loading');
+  sendAction('recheck');
 });
 
 sendAction('handshake', (response) => {
@@ -76,11 +81,13 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
         <h3>You can download all photo & videos in this page.</h3>
         `;
       } else {
+        btnRecheck.classList.add('show');
         text.innerHTML = `
         <h1>Social Media Easy Download</h1>
         <h3>Seems like there's nothing here, thanks for using me! :)</h3>
         `;
       }
+    case 'nothing':
       setTimeout(() => {
         body.classList.remove('loading');
       }, 500);

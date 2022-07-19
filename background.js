@@ -11,8 +11,8 @@ const fetchTimeout = 3000;
 function sendToPopup(action, message = {}) {
   chrome.runtime.sendMessage({action, ...message}, function(response) {
     let error = chrome.runtime.lastError;
-    if (error) console.error('[BG] action error:', action, error.message);
-    else console.log('[BG] action response:', action, response);
+    if (error) console.log('[BG] sendToPopup error:', action, error.message);
+    else console.log('[BG] sendToPopup response:', action, response);
   });
 }
 
@@ -28,33 +28,13 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         response.ok = false;
         break;
       }
-
-      if (!pics.length && !vids.length) {
-        detectTabs();
-      }
-
-      let { url } = currentTab;
-      let host = url.split('//').pop().split('/')[0];
-      let site = host.split('.').slice(0, -1).join('.');
-
-      // const isFacebook = isURLFacebook(url);
-      // const isFacebookVideo = isURLFacebookVideo(url);
-      // const isFacebookStory = isURLFacebookStory(url);
-      // const isFacebookPhoto = isURLFacebookPhoto(url);
-      // const isFacebookPost = isFacebookVideo || isFacebookStory || isFacebookPhoto;
-      const isInstagram = isURLInstagram(url);
-      const isInstagramPost = isURLInstagramPost(url);
-      // const isTwitter = isURLTwitter(url);
-      // const isTwitterPost = isURLTwitterPost(url);
-
-      const isBulkAvaiable = isInstagram && !isInstagramPost;
-      // const isBulkOngoing = bulkDownload == id;
-      const isBulkOngoing = !!bulkDownload;
-    
-      sendToPopup(action, {site, pics, vids, isBulkAvaiable, isBulkOngoing});
+      updatePopup();
       break;
     case 'showPopup':
       showPopup();
+      break;
+    case 'recheck':
+      analyzeTab();
       break;
     case 'bulkDownload':
       if (bulkDownload == currentTab.id) {
@@ -185,6 +165,32 @@ function generateIcons(tabId, name, suffix = '') {
   }});
   isReady = suffix == 'download';
   console.log('[IED] isReady', isReady);
+  if (isReady) updatePopup();
+}
+
+function updatePopup() {
+  if (!currentTab?.url) return;
+  if (!pics.length && !vids.length) detectTabs();
+
+  let { url } = currentTab;
+  let host = url.split('//').pop().split('/')[0];
+  let site = host.split('.').slice(0, -1).join('.');
+
+  // const isFacebook = isURLFacebook(url);
+  // const isFacebookVideo = isURLFacebookVideo(url);
+  // const isFacebookStory = isURLFacebookStory(url);
+  // const isFacebookPhoto = isURLFacebookPhoto(url);
+  // const isFacebookPost = isFacebookVideo || isFacebookStory || isFacebookPhoto;
+  const isInstagram = isURLInstagram(url);
+  const isInstagramPost = isURLInstagramPost(url);
+  // const isTwitter = isURLTwitter(url);
+  // const isTwitterPost = isURLTwitterPost(url);
+
+  const isBulkAvaiable = isInstagram && !isInstagramPost;
+  // const isBulkOngoing = bulkDownload == id;
+  const isBulkOngoing = !!bulkDownload;
+
+  sendToPopup('handshake', {site, pics, vids, isBulkAvaiable, isBulkOngoing});
 }
 
 function stopBulkDownload() {
@@ -237,6 +243,7 @@ function analyze(tab) {
     chrome.action.setTitle({title: 'Open a Facebook, Instagram, or Twitter post to download its photo and videos', tabId});
     chrome.action.setBadgeText({'text': ''});
     generateIcons(tabId, 'icon');
+    sendToPopup('nothing');
     return;
   }
 
