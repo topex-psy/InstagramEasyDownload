@@ -8,12 +8,54 @@ var inFocus = true;
 
 const fetchTimeout = 3000;
 
-chrome.action.onClicked.addListener(onIconClick);
+function sendToPopup(action, message = {}) {
+  chrome.runtime.sendMessage({action, ...message}, function(response) {
+    let error = chrome.runtime.lastError;
+    if (error) console.error('[BG] action error:', action, error.message);
+    else console.log('[BG] action response:', action, response);
+  });
+}
+
+chrome.action.onClicked.addListener(onIconClick); // TODO unused?
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   console.log("[IED] action from foreground", request, sender);
   let { action } = request;
   let response = {ok: true};
   switch (action) {
+    case 'handshake':
+      console.log("[IED] received handshake", currentTab);
+      if (!currentTab?.url) {
+        response.ok = false;
+        break;
+      }
+
+      if (!pics.length && !vids.length) {
+        detectTabs();
+      }
+
+      let { url } = currentTab;
+      let host = url.split('//').pop().split('/')[0];
+      let site = host.split('.').slice(0, -1).join('.');
+
+      // const isFacebook = isURLFacebook(url);
+      // const isFacebookVideo = isURLFacebookVideo(url);
+      // const isFacebookStory = isURLFacebookStory(url);
+      // const isFacebookPhoto = isURLFacebookPhoto(url);
+      // const isFacebookPost = isFacebookVideo || isFacebookStory || isFacebookPhoto;
+      const isInstagram = isURLInstagram(url);
+      const isInstagramPost = isURLInstagramPost(url);
+      // const isTwitter = isURLTwitter(url);
+      // const isTwitterPost = isURLTwitterPost(url);
+
+      const isBulkAvaiable = isInstagram && !isInstagramPost;
+      // const isBulkOngoing = bulkDownload == id;
+      const isBulkOngoing = !!bulkDownload;
+    
+      sendToPopup(action, {site, pics, vids, isBulkAvaiable, isBulkOngoing});
+      break;
+    case 'showPopup':
+      showPopup();
+      break;
     case 'escapeKey':
       if (bulkDownload == currentTab.id) stopBulkDownload();
       break;
@@ -89,7 +131,7 @@ function showPopup() {
   });
 }
 
-function onIconClick() {
+function onIconClick() { // TODO unused
   console.log('[IED] onIconClick tab', currentTab, isReady);
   if (!currentTab || !isReady) {
     console.warn('[IED] tab not ready, still counting ...');
@@ -455,6 +497,18 @@ async function fetchWithTimeout(url, options = {}) {
   }).then(res => res.json());
   clearTimeout(id);
   return responseJson;
+}
+
+async function detectTabs() {
+  let tabs = await chrome.tabs.query({ lastFocusedWindow: true, windowType: 'normal' });
+  let mediaTabs = tabs.filter(tab => isImageURL(tab.url));
+  console.info(`[IED] detectTabs opened media: ${mediaTabs.length} / ${tabs.length}`);
+  sendToPopup('mediaTabs', {tabs: mediaTabs});
+}
+
+function isImageURL(url) {
+  return /^http[^\?]*.(jpg|jpeg|tiff|gif|png|webp|bmp|apng|svg)(.*)(\?(.*))?$/gmi.test(url) ||
+        /https:\/\/pbs.twimg.com\/media\/[\w]+\?format=[\w]+&name=[\w]+/.test(url);
 }
 
 function analyzeTab() {

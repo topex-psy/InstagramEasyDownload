@@ -1,0 +1,222 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Social Media Easy Download</title>
+    <style>
+      body {
+        background: linear-gradient(45deg, #ffffff, #d4fff7db);
+        width: 275px;
+        padding: 10px;
+      }
+
+      .button {
+        display: flex;
+        align-items: center;
+        border: 0;
+        border-radius: 2rem;
+        padding: 10px 18px;
+        font-size: 12px !important;
+        font-weight: 600 !important;
+        color: #fff !important;
+        background: linear-gradient(45deg, #42a661, #4bc3fd);
+        box-shadow: 2px 2px 6px -4px #000;
+        cursor: pointer;
+        outline: none;
+      }
+      .button:hover {
+        filter: brightness(1.1);
+      }
+      .button:active {
+        filter: brightness(.95);
+        transform: scale(.95);
+      }
+      .button img {
+        margin-right: 8px !important;
+        margin-left: -1px !important;
+        width: 16px;
+      }
+      .button span {
+        background: #00000045;
+        border-radius: 50%;
+        width: 24px;
+        display: inline-block;
+        line-height: 24px !important;
+        margin-left: 5px !important;
+        margin-right: -12px !important;
+        margin-top: -2px !important;
+        margin-bottom: -2px !important;
+      }
+      .button.button-blue {
+        filter: hue-rotate(34deg);
+      }
+      .button.button-green {
+        filter: hue-rotate(315deg);
+      }
+      .button.button-purple {
+        filter: hue-rotate(77deg);
+      }
+      .button.button-red {
+        filter: hue-rotate(184deg);
+      }
+      .button.error {
+        filter: blur(2px);
+      }
+
+      #container {
+        display: flex;
+        align-items: center;
+      }
+      #logo {
+        width: 100px;
+        height: 100px;
+        margin-right: 20px;
+      }
+      #loader {
+        position: absolute;
+        left: 50%;
+        bottom: 0;
+        margin: 0 auto;
+        opacity: 0;
+        transform: scale(1);
+        transition: all .5s ease;
+        pointer-events: none;
+      }
+      #content {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: 10px 0;
+      }
+      #content h1 {
+        font-size: 20px;
+        font-weight: 600;
+        margin: 0 0 10px 0;
+      }
+      #content h3 {
+        margin: 0 0 8px 0;
+        font-weight: 400;
+        font-size: 14px;
+      }
+      #action {
+        margin-top: 8px;
+      }
+      #action button {
+        display: none;
+      }
+      #action button.show {
+        display: flex;
+      }
+      #body.loading #loader {
+        transform: scale(2.5);
+        opacity: .3;
+      }
+      #footer {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        align-items: flex-start;
+        white-space: nowrap;
+        margin-top: 1rem;
+        font-size: .7rem;
+      }
+      #footer div {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        font-size: 105%;
+        font-weight: 700;
+        margin-right: 12px;
+        margin-bottom: 4px;
+      }
+      #footer div img {
+        width: 20px;
+        margin-right: 4px;
+      }
+      #footer a {
+        font-weight: 600;
+      }
+
+      @keyframes ldio-zvh4uuyfju {
+        0%    { transform: translate(1px,1px) }
+        33.33% { transform: translate(51px,1px) }
+        66.66% { transform: translate(21px,51px) }
+        100%    { transform: translate(1px,1px) }
+      }
+
+      .ldio-zvh4uuyfju > div {
+        transform: scale(0.8);
+        transform-origin: 50px 50px;
+      }
+
+      .ldio-zvh4uuyfju > div > div {
+        animation: ldio-zvh4uuyfju 1s linear infinite;
+        position: absolute
+      }
+
+      .ldio-zvh4uuyfju > div > div div:nth-child(1) {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        border: 6px solid #3bcfb0;
+        background: #e8fffb
+      }
+
+      .ldio-zvh4uuyfju > div > div div:nth-child(2) {
+        width: 8.5px;
+        height:  25.5px;
+        transform: rotate(-45deg);
+        background: #3bcfb0;
+        border-radius: 0 0 4px 4px;
+        position: absolute;
+        top: 34px;
+        left: 42.5px
+      }
+      .loadingio-spinner-magnify-wc437k9qep8 {
+        width: 100px;
+        height: 100px;
+        display: inline-block;
+        overflow: hidden;
+      }
+      .ldio-zvh4uuyfju {
+        width: 100%;
+        height: 100%;
+        position: relative;
+        transform: translateZ(0) scale(1);
+        backface-visibility: hidden;
+        transform-origin: 0 0; /* see note above */
+      }
+      .ldio-zvh4uuyfju div { box-sizing: content-box; }
+    </style>
+  </head>
+  <body>
+    <div id="body" class="loading">
+      <div id="loader" class="loadingio-spinner-magnify-wc437k9qep8"><div class="ldio-zvh4uuyfju">
+        <div><div><div></div><div></div></div></div>
+        </div>
+      </div>
+      <div id="container">
+        <img id="logo" src="icons/icon.png"/>
+        <div id="content">
+          <div id="text"></div>
+          <div id="action">
+            <button class="button button-blue" id="btn-download-all"><img src="icons/download24.png"/>Download All</button>
+            <button class="button" id="btn-download"><img src="icons/download24.png"/>View/Download</button>
+            <button class="button button-blue" id="btn-bulk-start"><img src="icons/instagram_download24.png"/>Start Bulk Download</button>
+            <button class="button button-red" id="btn-bulk-stop">Stop Bulk Download</button>
+            <button class="button button-red" id="btn-close-tabs">Close Tabs</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="footer">
+      <div>
+        <img src="icons/icon24.png"/>
+        Social Media Easy Download
+      </div>
+      <span>
+        by Taufik Nur Rahmanda - <a href="https://www.taufiknur.com/" target="_blank">Visit my Website</a>
+      </span>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>

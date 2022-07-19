@@ -5,15 +5,18 @@
   "description": "Download all HQ photo and videos from Facebook, Instagram & Twitter.",
   "author": "Taufik Nur Rahmanda",
   "permissions": [
+    "tabs"
   ],
   "host_permissions": [
     "https://*.facebook.com/*",
     "https://*.instagram.com/*",
     "https://twitter.com/*",
-    "https://cdn.syndication.twimg.com/*"
+    "https://cdn.syndication.twimg.com/*",
+    "*://*/*"
   ],
   "action": {
     "default_title": "Open a Facebook, Instagram, or Twitter post to download its photo and videos",
+    "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "24": "icons/icon24.png",

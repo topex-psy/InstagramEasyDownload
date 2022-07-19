@@ -944,7 +944,7 @@ document.body.insertAdjacentHTML('beforeend', `
         Social Media Easy Download
       </div>
       <span>
-        Created by Taufik Nur Rahmanda - <a href="https://www.taufiknur.com/" target="_blank">Visit my Website</a>
+        by Taufik Nur Rahmanda - <a href="https://www.taufiknur.com/" target="_blank">Visit my Website</a>
       </span>
     </div>
   </div>
