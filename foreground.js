@@ -533,7 +533,7 @@ const __IED_showPopup = () => {
     a.download = getBaseName(url);
     a.className = 'active';
     a.appendChild(node);
-    a.addEventListener('click', (e) => {
+    a.onclick = (e) => {
       e.preventDefault();
       let a = e.currentTarget;
       if (a.classList.contains('active')) {
@@ -542,7 +542,7 @@ const __IED_showPopup = () => {
         a.classList.add('active');
       }
       __IED_countSelectedMedia();
-    });
+    };
     return a;
   };
   __IED_detectedPhotos.forEach((media) => {
@@ -571,7 +571,7 @@ const __IED_downloadSelected = (urls, download = true) => {
     a.click();
     a.remove();
   });
-  __IED_closePopup();
+  if (download) __IED_closePopup();
 }
 const __IED_observeDOM = (function() {
   var MutationObserver = window.MutationObserver || window.WebKitMutationObserver;

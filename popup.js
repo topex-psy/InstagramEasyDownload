@@ -78,7 +78,7 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
       } else {
         text.innerHTML = `
         <h1>Social Media Easy Download</h1>
-        <h3>Seems like there's nothing here, but we will see ...</h3>
+        <h3>Seems like there's nothing here, thanks for using me! :)</h3>
         `;
       }
       setTimeout(() => {
