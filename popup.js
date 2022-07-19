@@ -47,7 +47,9 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
   let response = {'ok': true};
   switch (action) {
     case 'mediaTabs':
+      if (!tabs.length) break;
       mediaTabs = tabs;
+      btnDownloadAll.querySelector('span').innerText = tabs.length;
       btnDownloadAll.classList.add('show');
       text.innerHTML = `
       <h1>Opened Media Detected!</h1>
@@ -55,30 +57,20 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
       `;
       break;
     case 'handshake':
-      if (mediaCount == 1) {
+      if (mediaCount) {
         sendAction('showPopup', window.close);
         break;
       }
-      if (!mediaCount) {
-        text.innerHTML = `
-        <h1>Social Media Easy Download</h1>
-        <h3>Seems like there's nothing here, but we will see ...</h3>
-        `;
-      } else if (isBulkAvaiable) {
+      if (isBulkAvaiable) {
         btnBulkStart.classList.add('show');
         text.innerHTML = `
         <h1>Bulk Download Available!</h1>
         <h3>You can download all photo & videos in this page.</h3>
         `;
       } else {
-        let what = [
-          pics.length ? `${pics.length} photos` : '',
-          vids.length ? `${vids.length} videos` : ''
-        ].filter(s=>s).join(', ');
-        btnDownload.classList.add('show');
         text.innerHTML = `
-        <h1>${pics.length + vids.length} Media Detected!</h1>
-        <h3>We've found ${what}</h3>
+        <h1>Social Media Easy Download</h1>
+        <h3>Seems like there's nothing here, but we will see ...</h3>
         `;
       }
       setTimeout(() => {
@@ -92,7 +84,8 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
 function downloadTabs() {
   mediaTabs.forEach(tab => {
     const a = document.createElement("a");
-    a.href = tab.url + (tab.url.includes('?') ? '&' : '?') + 'dl=1';
+    a.href = tab.url;
+    // a.href = tab.url + (tab.url.includes('?') ? '&' : '?') + 'dl=1';
     // a.target = '_blank'; // is it needed?
     a.download = tab.url.split("/").pop().split('?')[0];
     a.style.display = 'none';

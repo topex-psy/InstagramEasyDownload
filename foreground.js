@@ -571,6 +571,7 @@ const __IED_downloadSelected = (urls, download = true) => {
     a.click();
     a.remove();
   });
+  __IED_closePopup();
 }
 const __IED_observeDOM = (function() {
   var MutationObserver = window.MutationObserver || window.WebKitMutationObserver;
