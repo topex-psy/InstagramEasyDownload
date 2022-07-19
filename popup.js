@@ -21,9 +21,11 @@ function sendAction(action, callback = () => {}) {
   });
 }
 
-btnDownload.addEventListener('click', () => {
-  sendAction('showPopup', window.close);
+btnBulkStart.addEventListener('click', () => sendAction('bulkDownload', window.close));
+btnBulkStop.addEventListener('click', () => {
+  if (confirm('Are you sure you want to stop the operation now?')) sendAction('escapeKey', window.close);
 });
+btnDownload.addEventListener('click', () => sendAction('showPopup', window.close));
 btnDownloadAll.addEventListener('click', downloadTabs);
 btnCloseTabs.addEventListener('click', e => {
   mediaTabs.forEach((tab) => {
@@ -61,7 +63,13 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
         sendAction('showPopup', window.close);
         break;
       }
-      if (isBulkAvaiable) {
+      if (isBulkOngoing) {
+        btnBulkStop.classList.add('show');
+        text.innerHTML = `
+        <h1>Bulk Download is On-Going!</h1>
+        <h3>You can stop anytime by clicking the button below.</h3>
+        `;
+      } else if (isBulkAvaiable) {
         btnBulkStart.classList.add('show');
         text.innerHTML = `
         <h1>Bulk Download Available!</h1>

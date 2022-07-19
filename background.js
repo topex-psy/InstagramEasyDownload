@@ -16,7 +16,7 @@ function sendToPopup(action, message = {}) {
   });
 }
 
-chrome.action.onClicked.addListener(onIconClick); // TODO unused?
+// chrome.action.onClicked.addListener(onIconClick); // TODO unused?
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   console.log("[IED] action from foreground", request, sender);
   let { action } = request;
@@ -56,8 +56,22 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     case 'showPopup':
       showPopup();
       break;
+    case 'bulkDownload':
+      if (bulkDownload == currentTab.id) {
+        stopBulkDownload();
+        break;
+      }
+      chrome.tabs.sendMessage(currentTab.id, { action: 'bulkDownload' }, function(response) {
+        let error = chrome.runtime.lastError;
+        if (error) return console.log('[IED] bulkDownload error:', error.message);
+        if (response?.result) {
+          bulkDownload = currentTab.id;
+          analyzeTab();
+        }
+      });
+      break;
     case 'escapeKey':
-      if (bulkDownload == currentTab.id) stopBulkDownload();
+      stopBulkDownload();
       break;
   }
   sendResponse({action, ...response});
@@ -131,36 +145,36 @@ function showPopup() {
   });
 }
 
-function onIconClick() { // TODO unused
-  console.log('[IED] onIconClick tab', currentTab, isReady);
-  if (!currentTab || !isReady) {
-    console.warn('[IED] tab not ready, still counting ...');
-    analyzeTab();
-    return false;
-  }
-  const { url } = currentTab;
-  const isFacebookPost = isURLFacebookVideo(url) || isURLFacebookStory(url) || isURLFacebookPhoto(url);
-  const isTwitterPost = isURLTwitterPost(url);
-  const isInstagramPost = isURLInstagramPost(url);
-  const isInstagram = isURLInstagram(url);
+// function onIconClick() { // TODO unused
+//   console.log('[IED] onIconClick tab', currentTab, isReady);
+//   if (!currentTab || !isReady) {
+//     console.warn('[IED] tab not ready, still counting ...');
+//     analyzeTab();
+//     return false;
+//   }
+//   const { url } = currentTab;
+//   const isFacebookPost = isURLFacebookVideo(url) || isURLFacebookStory(url) || isURLFacebookPhoto(url);
+//   const isTwitterPost = isURLTwitterPost(url);
+//   const isInstagramPost = isURLInstagramPost(url);
+//   const isInstagram = isURLInstagram(url);
 
-  if (isFacebookPost || isInstagramPost || isTwitterPost) { // if it's a post page
-    showPopup();
-  } else if (isInstagram) { // if it's an instagram profile page
-    if (bulkDownload == currentTab.id) return stopBulkDownload();
-    chrome.tabs.sendMessage(currentTab.id, { action: 'bulkDownload' }, function(response) {
-      let error = chrome.runtime.lastError;
-      if (error) return console.log('[IED] bulkDownload error:', error.message);
-      if (response?.result) {
-        bulkDownload = currentTab.id;
-        analyzeTab();
-      }
-    });
-  } else { // click action not supported in this page
-    analyzeTab();
-  }
-  return true;
-}
+//   if (isFacebookPost || isInstagramPost || isTwitterPost) { // if it's a post page
+//     showPopup();
+//   } else if (isInstagram) { // if it's an instagram profile page
+//     if (bulkDownload == currentTab.id) return stopBulkDownload();
+//     chrome.tabs.sendMessage(currentTab.id, { action: 'bulkDownload' }, function(response) {
+//       let error = chrome.runtime.lastError;
+//       if (error) return console.log('[IED] bulkDownload error:', error.message);
+//       if (response?.result) {
+//         bulkDownload = currentTab.id;
+//         analyzeTab();
+//       }
+//     });
+//   } else { // click action not supported in this page
+//     analyzeTab();
+//   }
+//   return true;
+// }
 
 function generateIcons(tabId, name, suffix = '') {
   console.log('[IED] set action icon', tabId, name);
