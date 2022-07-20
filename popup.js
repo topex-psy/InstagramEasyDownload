@@ -86,7 +86,7 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
         btnRecheck.classList.add('show');
         text.innerHTML = `
         <h1>Social Media Easy Download</h1>
-        <h3>Seems like there's nothing here, please try to open a post, photo or video.</h3>
+        <h3>Seems like there's nothing here, please try to open any post, photo or video.</h3>
         `;
       }
     case 'nothing':
