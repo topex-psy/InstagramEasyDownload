@@ -245,7 +245,7 @@ function analyze(tab) {
     chrome.action.setTitle({title: 'Bulk download photos and videos HD in 1-click', tabId});
     chrome.action.setBadgeBackgroundColor({'color': '#333333'});
     chrome.action.setBadgeText({'text': 'All'});
-    generateIcons(tabId, '', 'download');
+    generateIcons(tabId, site, '_download');
   }
 };
 
