@@ -9,8 +9,10 @@ const btnDownload = document.getElementById("btn-download");
 const btnDownloadAll = document.getElementById("btn-download-all");
 const btnCloseTabs = document.getElementById("btn-close-tabs");
 const btnRecheck = document.getElementById("btn-recheck");
+const maxConsecutiveDownloads = 10;
 
 var mediaTabs = [];
+var downloadedTabs = [];
 
 function sendAction(action, callback = () => {}) {
   console.log('sending action', action);
@@ -29,13 +31,13 @@ btnBulkStop.addEventListener('click', () => {
 btnDownload.addEventListener('click', () => sendAction('showPopup', window.close));
 btnDownloadAll.addEventListener('click', downloadTabs);
 btnCloseTabs.addEventListener('click', e => {
-  mediaTabs.forEach((tab) => {
+  downloadedTabs.forEach((tab) => {
     try {
       chrome.tabs.remove(+tab.id);
     } catch(err) {
     }
   });
-  mediaTabs.length = 0;
+  downloadedTabs.length = 0;
   window.close();
 });
 btnRecheck.addEventListener('click', () => {
@@ -84,7 +86,7 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
         btnRecheck.classList.add('show');
         text.innerHTML = `
         <h1>Social Media Easy Download</h1>
-        <h3>Seems like there's nothing here, thanks for using me! :)</h3>
+        <h3>Seems like there's nothing here, please try to open a post, photo or video.</h3>
         `;
       }
     case 'nothing':
@@ -97,7 +99,9 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
 });
 
 function downloadTabs() {
-  mediaTabs.forEach(tab => {
+  if (mediaTabs.length > maxConsecutiveDownloads && !confirm(`Download ${maxConsecutiveDownloads} from ${mediaTabs.length} media now?`)) return;
+  downloadedTabs = mediaTabs.slice(0, maxConsecutiveDownloads);
+  downloadedTabs.forEach(tab => {
     const a = document.createElement("a");
     a.href = tab.url;
     // a.href = tab.url + (tab.url.includes('?') ? '&' : '?') + 'dl=1';
@@ -109,9 +113,11 @@ function downloadTabs() {
     a.remove();
   });
   text.innerHTML = `
-        <h1>${mediaTabs.length} Media Downloaded!</h1>
+        <h1>${downloadedTabs.length} Media Downloaded!</h1>
         <h3>All opened media has beed downloaded. Now you can close the tabs.</h3>
         `;
+  btnRecheck.classList.remove('show');
   btnDownloadAll.classList.remove('show');
+  btnCloseTabs.innerText = `Close ${downloadedTabs.length} Tabs`;
   btnCloseTabs.classList.add('show');
 }

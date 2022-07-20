@@ -555,6 +555,7 @@ const __IED_showPopup = () => {
   setTimeout(() => {
     btnDownload.classList.remove('loading');
     btnDownload.querySelector('img').src = __IED_iconURL;
+    __IED_countSelectedMedia();
     __IED_popupWrapper.classList.add('show');
   }, 500);
 }

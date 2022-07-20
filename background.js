@@ -528,7 +528,7 @@ async function detectTabs() {
 }
 
 function isImageURL(url) {
-  return /^http[^\?]*.(jpg|jpeg|tiff|gif|png|webp|bmp|apng|svg)(.*)(\?(.*))?$/gmi.test(url) ||
+  return /^http[^\?]*.(jpg|jpeg|tiff|gif|png|webp|bmp|apng|svg|mp4)(.*)(\?(.*))?$/gmi.test(url) ||
         /https:\/\/pbs.twimg.com\/media\/[\w]+\?format=[\w]+&name=[\w]+/.test(url);
 }
 
