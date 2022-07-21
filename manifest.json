@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Social Media Easy Download",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Download all HQ photo and videos from Facebook, Instagram & Twitter.",
   "author": "Taufik Nur Rahmanda",
   "permissions": [
@@ -49,6 +49,8 @@
         "icons/instagram_download24.png",
         "icons/twitter_download24.png",
         "icons/new_tab.png",
+        "icons/close.png",
+        "icons/expand.png",
         "icons/spinner.gif"
       ],
       "matches": [

@@ -1,5 +1,7 @@
 const __IED_site = window.location.host.split('.').slice(-2, -1)[0];
 const __IED_icon = chrome.runtime.getURL(`/icons/icon24.png`);
+const __IED_iconClose = chrome.runtime.getURL(`/icons/close.png`);
+const __IED_iconExpand = chrome.runtime.getURL(`/icons/expand.png`);
 const __IED_iconNewTab = chrome.runtime.getURL(`/icons/new_tab.png`);
 const __IED_iconSpinner = chrome.runtime.getURL(`/icons/spinner.gif`);
 const __IED_iconURL = chrome.runtime.getURL(`/icons/${__IED_site}_download24.png`);
@@ -8,6 +10,7 @@ var __IED_detectedPhotos = [];
 var __IED_detectedVideos = [];
 var __IED_selectedPhotos = [];
 var __IED_selectedVideos = [];
+var __IED_selectedPost = [];
 var __IED_previousHref;
 
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
@@ -19,13 +22,43 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
       __IED_showPopup();
       sendResponse({result: true});
       break;
+    case 'extractMedia':
+      let els = document.querySelectorAll("img, video");
+      __IED_detectedPhotos.length = 0;
+      __IED_detectedVideos.length = 0;
+      let urls = [];
+      for (let i = 0; i < els.length; i++) {
+        let el = els[i];
+        if (el.closest(`#${__IED_popupID}`) || el.closest(`#${__IED_imageViewerID}`)) continue; // exclude our elements
+        let mediaType = el.tagName.toLocaleLowerCase() == 'img' ? 'photo' : 'video';
+        let mediaUrl = mediaType == 'photo' ? el.src : el.querySelector('source').src;
+        let media = {url: mediaUrl, hd: mediaUrl};
+        urls.push(media.url);
+        if (mediaType == 'photo') {
+          __IED_detectedPhotos.push(media);
+        } else {
+          __IED_detectedVideos.push(media);
+        }
+      }
+      __IED_showPopup();
+      sendResponse({result: true});
+      break;
+    case 'selectDownload':
+      let postLinks = document.querySelectorAll('a[href^="/p/"]');
+      for (let i = 0; i < postLinks.length; i++) {
+        let link = postLinks[i];
+        link.addEventListener('click', __IED_selectPost);
+      }
+      // TODO select download
+      sendResponse({result: true});
+      break;
     case 'bulkDownload':
       let bulkDownload = false;
       let firstPost = document.querySelector('a[href^="/p/"]');
       if (firstPost) {
         if (firstPost.href.includes('liked_by')) {
           alert("Please open an Instagram account page.");
-        } else if (confirm("Are you sure you want to mass download all photos and videos in this Instagram?\n\n1. Click the first (newest) post to start bulk download.\n2. Press Esc anytime to stop the operation.")) {
+        } else if (confirm("Are you sure you want to mass download all photos and videos in this Instagram?\n\n1. Click the first (newest) post to start bulk download.\n2. Click 'Stop Bulk Download' to stop the operation.")) {
           bulkDownload = true;
           // firstPost.click();
         }
@@ -35,7 +68,6 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
       sendResponse({result: bulkDownload});
       break;
     case 'nextPost':
-      // __IED_downloadSelected();
       __IED_downloadSelected(null, false); // open in new tab
       let button = document.querySelector('div[role="dialog"] button svg[aria-label="Next"]')?.closest('button');
       if (button != null) button.click(); else alert("Last post has been reached. Bulk download finished!");
@@ -439,13 +471,11 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
 
 document.onkeydown = (e) => {
   if (e.key === "Escape") {
-    // e.preventDefault();
-    __IED_closePopup();
-    chrome.runtime?.sendMessage({action: 'escapeKey', url: window.location.href}, function(response) {
-      let error = chrome.runtime.lastError;
-      if (error) return console.log('[IED] escapeKey error', error.message);
-      console.log('[IED] escapeKey response', response);
-    });
+    if (__IED_popupWrapper.classList.includes('show')) {
+      e.preventDefault();
+      e.stopPropagation();
+      __IED_hidePopup();
+    }
   }
 };
 
@@ -453,6 +483,7 @@ const __IED_buttonClass = '__IED_button';
 const __IED_checkboxClass = '__IED_checkbox';
 const __IED_newTabClass = '__IED_newTab';
 const __IED_captionClass = '__IED_caption';
+const __IED_containerClass = '__IED_container';
 const __IED_downloadButtonID = '__IED_downloadButton';
 const __IED_popupWrapperID = '__IED_popupWrapper';
 const __IED_popupPhotosTitleID = '__IED_popupPhotosTitle';
@@ -472,14 +503,77 @@ const __IED_popupDownloadAllID = '__IED_popupDownloadAll';
 const __IED_popupReloadID = '__IED_popupReload';
 const __IED_popupCloseID = '__IED_popupClose';
 const __IED_popupID = '__IED_popup';
+const __IED_imageViewerID = '__IED_imageViewer';
 
-const __IED_closePopup = () => __IED_popupWrapper.classList.remove('show');
+let __IED_getBaseName = (url) => url.split("/").pop().split('?')[0];
+let __IED_createLink = (category, media) => {
+  let url = media.url;
+  let thumbnail = media.thumbnail;
+  let preview;
+  let node;
+  if (category == 'photo') {
+    node = document.createElement("img");
+    node.src = thumbnail || media.sd || media.hd;
+    preview = document.createElement("img");
+    preview.src = url;
+  } else {
+    if (thumbnail) {
+      node = document.createElement("img");
+      node.src = thumbnail;
+    } else {
+      let source = document.createElement("source");
+      source.src = media.sd || media.hd;
+      node = document.createElement("video");
+      node.appendChild(source);
+    }
+    let source = document.createElement("source");
+    source.src = url;
+    preview = document.createElement("video");
+    preview.controls = true;
+    preview.appendChild(source);
+  }
+  let div = document.createElement("div");
+  let expand = document.createElement("div");
+  let a = document.createElement("a");
+  a.href = url;
+  a.target = '_blank';
+  a.download = __IED_getBaseName(url);
+  a.className = 'active';
+  a.appendChild(node);
+  a.onclick = (e) => {
+    e.preventDefault();
+    let a = e.currentTarget;
+    if (a.classList.contains('active')) {
+      a.classList.remove('active');
+    } else {
+      a.classList.add('active');
+    }
+    __IED_countSelectedMedia();
+  };
+  expand.classList.add('btn-expand');
+  expand.onclick = (e) => {
+    __IED_showImageViewer(preview.cloneNode(true));
+  };
+  div.appendChild(a);
+  div.appendChild(expand);
+  return div;
+};
+
+const __IED_sendToBackground = (action, messages) => {
+  chrome.runtime?.sendMessage({action, url: window.location.href, ...messages}, function(response) {
+    let error = chrome.runtime.lastError;
+    if (error) return console.log(`[IED] ${action} error`, error.message);
+    console.log(`[IED] ${action} response`, response);
+  });
+};
 const __IED_showPopup = () => {
   let totalItems = __IED_detectedPhotos.length + __IED_detectedVideos.length;
   if (totalItems == 1) return __IED_downloadSelected(); // direct download if there are just 1 item
   let btnDownload = document.getElementById(__IED_downloadButtonID);
-  btnDownload.classList.add('loading');
-  btnDownload.querySelector('img').src = __IED_iconSpinner;
+  if (btnDownload) {
+    btnDownload.classList.add('loading');
+    btnDownload.querySelector('img').src = __IED_iconSpinner;
+  }
   __IED_selectedPhotos.length = 0;
   __IED_selectedVideos.length = 0;
 
@@ -508,57 +602,40 @@ const __IED_showPopup = () => {
   __IED_popupPhotosContainer.innerHTML = '';
   __IED_popupVideosContainer.innerHTML = '';
 
-  let getBaseName = (url) => url.split("/").pop().split('?')[0];
-  let createLink = (category, media) => {
-    let url = media.url;
-    let node;
-    if (category == 'photo') {
-      let thumbnail = media.thumbnail || media.sd || media.hd;
-      node = document.createElement("img");
-      node.src = thumbnail;
-    } else {
-      let thumbnail = media.thumbnail;
-      if (thumbnail) {
-        node = document.createElement("img");
-        node.src = thumbnail;
-      } else {
-        let source = document.createElement("source");
-        source.src = media.sd || media.hd;
-        node = document.createElement("video");
-        node.appendChild(source);
-      }
-    }
-    let a = document.createElement("a");
-    a.href = url;
-    a.target = '_blank';
-    a.download = getBaseName(url);
-    a.className = 'active';
-    a.appendChild(node);
-    a.onclick = (e) => {
-      e.preventDefault();
-      let a = e.currentTarget;
-      if (a.classList.contains('active')) {
-        a.classList.remove('active');
-      } else {
-        a.classList.add('active');
-      }
-      __IED_countSelectedMedia();
-    };
-    return a;
-  };
   __IED_detectedPhotos.forEach((media) => {
-    __IED_popupPhotosContainer.appendChild(createLink('photo', media));
+    __IED_popupPhotosContainer.appendChild(__IED_createLink('photo', media));
   });
   __IED_detectedVideos.forEach((media) => {
-    __IED_popupVideosContainer.appendChild(createLink('video', media));
+    __IED_popupVideosContainer.appendChild(__IED_createLink('video', media));
   });
 
   setTimeout(() => {
-    btnDownload.classList.remove('loading');
-    btnDownload.querySelector('img').src = __IED_iconURL;
+    if (btnDownload) {
+      btnDownload.classList.remove('loading');
+      btnDownload.querySelector('img').src = __IED_iconURL;
+    }
     __IED_countSelectedMedia();
     __IED_popupWrapper.classList.add('show');
   }, 500);
+}
+const __IED_showImageViewer = (node) => {
+  __IED_imageViewer.innerHTML = '<div class="btn-close"></div>';
+  __IED_imageViewer.appendChild(node);
+  __IED_imageViewer.classList.add('show');
+}
+const __IED_hidePopup = () => {
+  __IED_popupWrapper.classList.remove('show');
+  __IED_sendToBackground('recheck');
+}
+const __IED_hideImageViewer = () => __IED_imageViewer.classList.remove('show');
+const __IED_selectedPostCount = () => {
+  // TODO count selected post, show button & checkmarks
+}
+const __IED_selectPost = (e) => {
+  e.preventDefault();
+  // TODO fetch twitter post
+  // __IED_selectedPost.push(e.currentTarget.href);
+  // __IED_selectedPostCount();
 }
 const __IED_downloadSelected = (urls, download = true) => {
   urls = urls || [...__IED_detectedPhotos, ...__IED_detectedVideos].map((media) => media.url);
@@ -573,7 +650,7 @@ const __IED_downloadSelected = (urls, download = true) => {
     a.click();
     a.remove();
   });
-  if (download) __IED_closePopup();
+  if (download) __IED_hidePopup();
 }
 const __IED_observeDOM = (function() {
   var MutationObserver = window.MutationObserver || window.WebKitMutationObserver;
@@ -762,36 +839,62 @@ const __IED_injectCSS = () => {
   #${__IED_popupBodyID} .${__IED_captionClass} input[type='checkbox'] {
     margin-right: 4px;
   }
-  #${__IED_popupPhotosContainerID},
-  #${__IED_popupVideosContainerID} {
+  #${__IED_popupBodyID} .${__IED_containerClass} {
     display: block;
     margin-bottom: 8px;
     line-height: 0;
   }
-  #${__IED_popupPhotosContainerID} img,
-  #${__IED_popupVideosContainerID} img,
-  #${__IED_popupVideosContainerID} video {
+  #${__IED_popupBodyID} .${__IED_containerClass} img,
+  #${__IED_popupBodyID} .${__IED_containerClass} video {
     height: 120px;
     border-radius: 0.5rem;
     cursor: pointer;
     transition: all .2s ease-out;
   }
-  #${__IED_popupPhotosContainerID} img:hover,
-  #${__IED_popupVideosContainerID} img:hover,
-  #${__IED_popupVideosContainerID} video:hover {
+  #${__IED_popupBodyID} .${__IED_containerClass} img:hover,
+  #${__IED_popupBodyID} .${__IED_containerClass} video:hover {
     transform: scale(1.05);
     filter: brightness(1.1) contrast(1) drop-shadow(0 2px 5px rgba(0,0,0,.2));
   }
-  #${__IED_popupBodyID} a {
+  #${__IED_popupBodyID} .${__IED_containerClass} > div {
+    position: relative;
+    display: inline-flex;
+  }
+  #${__IED_popupBodyID} .${__IED_containerClass} > div:hover .btn-expand {
+    opacity: 1;
+    transform: scale(1);
+  }
+  #${__IED_popupBodyID} .${__IED_containerClass} .btn-expand {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    cursor: pointer;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    background: linear-gradient(45deg, #42a661, #4bc3fd);
+    opacity: 0;
+    transform: scale(0);
+    transition: all .2s ease-out;
+  }
+  #${__IED_popupBodyID} .${__IED_containerClass} .btn-expand::after {
+    content: '';
+    display: inline-block;
+    background: url(${__IED_iconExpand}) no-repeat center;
+    background-size: 13px;
+    width: 100%;
+    height: 100%;
+  }
+  #${__IED_popupBodyID} .${__IED_containerClass} a {
     position: relative;
     display: inline-block;
     margin-right: 12px;
     margin-bottom: 12px;
   }
-  #${__IED_popupBodyID} a:active {
+  #${__IED_popupBodyID} .${__IED_containerClass} a:active {
     opacity: 1;
   }
-  #${__IED_popupBodyID} a::after {
+  #${__IED_popupBodyID} .${__IED_containerClass} a::after {
     content: '✔';
     position: absolute;
     top: -2px;
@@ -812,13 +915,12 @@ const __IED_injectCSS = () => {
     transform: scale(0.5);
     transition: all .15s ease;
   }
-  #${__IED_popupBodyID} a.active::after {
+  #${__IED_popupBodyID} .${__IED_containerClass} a.active::after {
     opacity: 1;
     transform: scale(1);
   }
-  #${__IED_popupPhotosContainerID} a.active img,
-  #${__IED_popupVideosContainerID} a.active img,
-  #${__IED_popupVideosContainerID} a.active video {
+  #${__IED_popupBodyID} .${__IED_containerClass} a.active img,
+  #${__IED_popupBodyID} .${__IED_containerClass} a.active video {
     outline: 3px solid #31a97cd1;
     transform: scale(1.02);
   }
@@ -897,6 +999,48 @@ const __IED_injectCSS = () => {
   #${__IED_downloadButtonID}.loading {
     transform: translateY(0);
     opacity: 1;
+  }
+  #${__IED_imageViewerID} {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    pointer-events: none;
+    position: fixed;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    opacity: 0;
+    transition: all .2s ease;
+    background: rgba(0,0,0,.8);
+    overflow-y: auto;
+  }
+  #${__IED_imageViewerID} .btn-close {
+    position: absolute;
+    right: 10px;
+    top: 10px;
+    cursor: pointer;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(45deg, #42a66152, #4bc3fd4d);
+    opacity: .6;
+    transition: opacity .2s ease;
+  }
+  #${__IED_imageViewerID} .btn-close:hover {
+    opacity: 1;
+  }
+  #${__IED_imageViewerID} .btn-close::after {
+    content: '';
+    display: inline-block;
+    background: url(${__IED_iconClose}) no-repeat center;
+    background-size: 15px;
+    width: 100%;
+    height: 100%;
+  }
+  #${__IED_imageViewerID}.show {
+    pointer-events: auto;
+    opacity: 1;
   }`;
   document.head.appendChild(css);
 }
@@ -917,7 +1061,7 @@ document.body.insertAdjacentHTML('beforeend', `
           <button class="${__IED_buttonClass} ${__IED_newTabClass}" id="${__IED_popupPhotosNTID}"></button>
         </div>
       </div>
-      <div id="${__IED_popupPhotosContainerID}"></div>
+      <div class="${__IED_containerClass}" id="${__IED_popupPhotosContainerID}"></div>
       <div class="${__IED_captionClass}">
         <div>
           <h4 id="${__IED_popupVideosTitleID}"></h4>
@@ -930,7 +1074,7 @@ document.body.insertAdjacentHTML('beforeend', `
           <button class="${__IED_buttonClass} ${__IED_newTabClass}" id="${__IED_popupVideosNTID}"></button>
         </div>
       </div>
-      <div id="${__IED_popupVideosContainerID}"></div>
+      <div class="${__IED_containerClass}" id="${__IED_popupVideosContainerID}"></div>
     </div>
     <div id="${__IED_popupActionID}">
       <div>
@@ -952,6 +1096,8 @@ document.body.insertAdjacentHTML('beforeend', `
     </div>
   </div>
   <p id="${__IED_popupCloseID}">Click anywhere to close</p>
+</div>
+<div id="${__IED_imageViewerID}">
 </div>
 `);
 
@@ -988,13 +1134,17 @@ const __IED_popupVideosDL = document.getElementById(__IED_popupVideosDLID);
 const __IED_popupVideosNT = document.getElementById(__IED_popupVideosNTID);
 const __IED_popupPhotosSelectAll = document.getElementById(__IED_popupPhotosSelectAllID);
 const __IED_popupVideosSelectAll = document.getElementById(__IED_popupVideosSelectAllID);
+const __IED_imageViewer = document.getElementById(__IED_imageViewerID);
 
-__IED_popupWrapper.addEventListener('click', __IED_closePopup);
+__IED_popupWrapper.addEventListener('click', __IED_hidePopup);
 __IED_popupDownloadAll.addEventListener('click', __IED_downloadSelectedMedia);
 __IED_popupPhotosDL.addEventListener('click', () => __IED_downloadSelectedPics(true));
 __IED_popupPhotosNT.addEventListener('click', () => __IED_downloadSelectedPics(false));
 __IED_popupVideosDL.addEventListener('click', () => __IED_downloadSelectedVids(true));
 __IED_popupVideosNT.addEventListener('click', () => __IED_downloadSelectedVids(false));
+__IED_imageViewer.addEventListener('click', (e) => {
+  if (e.target.id == __IED_imageViewerID || e.target.className == 'btn-close') __IED_hideImageViewer();
+});
 
 document.getElementById(__IED_popupID).addEventListener('click', (e) => e.stopPropagation());
 document.getElementById(__IED_popupReloadID).addEventListener('click', () => window.location.reload());

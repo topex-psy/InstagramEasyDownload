@@ -7,6 +7,8 @@ const btnBulkStart = document.getElementById("btn-bulk-start");
 const btnBulkStop = document.getElementById("btn-bulk-stop");
 const btnDownload = document.getElementById("btn-download");
 const btnDownloadAll = document.getElementById("btn-download-all");
+const btnDownloadSelect = document.getElementById("btn-download-select");
+const btnExtractMedia = document.getElementById("btn-extract-media");
 const btnCloseTabs = document.getElementById("btn-close-tabs");
 const btnRecheck = document.getElementById("btn-recheck");
 const maxConsecutiveDownloads = 10;
@@ -30,6 +32,8 @@ btnBulkStop.addEventListener('click', () => {
 });
 btnDownload.addEventListener('click', () => sendAction('showPopup', window.close));
 btnDownloadAll.addEventListener('click', downloadTabs);
+btnDownloadSelect.addEventListener('click', () => sendAction('selectDownload', window.close));
+btnExtractMedia.addEventListener('click', () => sendAction('extractMedia', window.close));
 btnCloseTabs.addEventListener('click', e => {
   downloadedTabs.forEach((tab) => {
     try {
@@ -51,7 +55,7 @@ sendAction('handshake', (response) => {
 
 chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
   console.log('got message', message);
-  let { action, site, pics, vids, tabs, isBulkAvaiable, isBulkOngoing } = message;
+  let { action, url, pics, vids, tabs, isBulkAvaiable, isBulkOngoing } = message;
   let mediaCount = pics?.length + vids?.length;
   let response = {'ok': true};
   switch (action) {
@@ -66,6 +70,9 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
       `;
       break;
     case 'handshake':
+      let host = url.split('//').pop().split('/')[0];
+      let site = host.split('.').slice(0, -1).join('.');
+      site = ['facebook', 'instagram', 'twitter'].includes(site) ? site : null;
       if (mediaCount) {
         sendAction('showPopup', window.close);
         break;
@@ -78,14 +85,16 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
         `;
       } else if (isBulkAvaiable) {
         btnBulkStart.classList.add('show');
+        btnDownloadSelect.classList.add('show');
         text.innerHTML = `
         <h1>Bulk Download Available!</h1>
         <h3>You can download all photo & videos in this page.</h3>
         `;
       } else {
         btnRecheck.classList.add('show');
+        btnExtractMedia.classList.add('show');
         text.innerHTML = `
-        <h1>Social Media Easy Download</h1>
+        <h1>${site ? `You're on ${site[0].toUpperCase() + site.slice(1)}` : `Social Media Easy Download`}</h1>
         <h3>Seems like there's nothing here, please try to open any post, photo or video.</h3>
         `;
       }
@@ -117,6 +126,7 @@ function downloadTabs() {
         <h3>All opened media has beed downloaded. Now you can close the tabs.</h3>
         `;
   btnRecheck.classList.remove('show');
+  btnExtractMedia.classList.remove('show');
   btnDownloadAll.classList.remove('show');
   btnCloseTabs.innerText = `Close ${downloadedTabs.length} Tabs`;
   btnCloseTabs.classList.add('show');

@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
   <head>
     <title>Social Media Easy Download</title>
@@ -22,6 +22,7 @@
         box-shadow: 2px 2px 6px -4px #000;
         cursor: pointer;
         outline: none;
+        position: relative;
       }
       .button:hover {
         filter: brightness(1.1);
@@ -29,6 +30,18 @@
       .button:active {
         filter: brightness(.95);
         transform: scale(.95);
+      }
+      .button em {
+        position: absolute;
+        top: -4px;
+        right: -2px;
+        background-color: #fff68f;
+        border-radius: 1rem;
+        padding: 2px 6px;
+        font-size: 9px;
+        font-style: normal;
+        font-weight: 500;
+        color: #000;
       }
       .button img {
         margin-right: 8px !important;
@@ -60,6 +73,13 @@
       }
       .button.error {
         filter: blur(2px);
+      }
+      .link {
+        cursor: pointer;
+        color: #3877a6;
+      }
+      .link:hover {
+        color: #154366;
       }
 
       #container {
@@ -100,11 +120,14 @@
       #action {
         margin-top: 8px;
       }
-      #action button {
+      #action > div {
+        margin-top: 15px;
+      }
+      #action > button {
         display: none;
         margin-bottom: 8px;
       }
-      #action button.show {
+      #action > button.show {
         display: flex;
       }
       #body.loading #loader {
@@ -187,7 +210,7 @@
         position: relative;
         transform: translateZ(0) scale(1);
         backface-visibility: hidden;
-        transform-origin: 0 0; /* see note above */
+        transform-origin: 0 0;
       }
       .ldio-zvh4uuyfju div { box-sizing: content-box; }
     </style>
@@ -209,6 +232,10 @@
             <button class="button" id="btn-bulk-stop">Stop Bulk Download</button>
             <button class="button button-red" id="btn-close-tabs">Close Tabs</button>
             <button class="button button-purple" id="btn-recheck">Re-Check</button>
+            <!-- <button class="button button-green" id="btn-extract-media">Extract Media</button> -->
+            <button class="button" id="btn-download-select">Select Download<em>New</em></button>
+            <div></div>
+            <a class="link" id="btn-extract-media">Extract All Media From This Page</a>
           </div>
         </div>
       </div>
