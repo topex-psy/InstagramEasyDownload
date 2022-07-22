@@ -15,7 +15,7 @@ var __IED_previousHref;
 var __IED_selectDownload = false;
 
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
-  let { action, next, category, type, observeDOM, pics, vids, url } = request;
+  let { action, next, category, type, observeDOM, pics, vids, urls, url } = request;
   console.log("[IED] got action:", action, request);
 
   switch (action) {
@@ -27,7 +27,6 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
       let els = document.querySelectorAll('img, video, [data-visualcompletion="css-img"], [role="img"]');
       __IED_detectedPhotos.length = 0;
       __IED_detectedVideos.length = 0;
-      let urls = [];
       for (let i = 0; i < els.length; i++) {
         let el = els[i];
         if (el.closest(`#${__IED_popupID}`) || el.closest(`#${__IED_imageViewerID}`)) continue; // exclude our elements
@@ -47,7 +46,6 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         }
         if (!mediaUrl) continue;
         let media = {url: mediaUrl, hd: mediaUrl};
-        urls.push(media.url);
         if (mediaType == 'photo') {
           __IED_detectedPhotos.push(media);
         } else {
@@ -58,22 +56,30 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
       sendResponse({result: true});
       break;
     case 'selectDownload':
-      let postLinks = document.querySelectorAll('a[href^="/p/"]');
       if (__IED_selectDownload) {
-        for (let i = 0; i < postLinks.length; i++) {
-          let link = postLinks[i];
+        if (urls) {
+          // let link = document.querySelector('a[href="/p/CfnZJctLlDf/"]');
+          let link = document.querySelector(`a[href="${url.split('.com').pop()}"]`);
           if (link.classList.contains(__IED_loadingClass)) {
             link.classList.remove(__IED_loadingClass);
-            link.classList.add(__IED_activeClass);
+            link.classList.remove(__IED_activeClass);
+            link.classList.add(__IED_doneClass);
           }
+          __IED_downloadSelected(urls, false);
         }
-        __IED_downloadSelected([...pics, ...vids].map((media) => media.url), false);
       } else {
-        alert("Let's click on any post to download its media!");
+        let postLinks = document.querySelectorAll('a[href^="/p/"]');
+        alert("Let's click any post you like to be selected for a batch download!");
         for (let i = 0; i < postLinks.length; i++) {
           let link = postLinks[i];
           link.classList.add(__IED_gridClass);
-          link.addEventListener('click', __IED_clickPost);
+          link.addEventListener('click', __IED_selectPost);
+
+          let dl = document.createElement("button");
+          dl.classList.add(__IED_buttonClass);
+          dl.classList.add(__IED_downloadClass);
+          dl.onclick = () => __IED_downloadPost(link);
+          link.appendChild(dl);
         }
         __IED_selectDownload = true;
       }
@@ -99,8 +105,12 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
       for (let i = 0; i < posts.length; i++) {
         let link = posts[i];
         link.classList.remove(__IED_gridClass);
-        link.removeEventListener('click', __IED_clickPost);
+        link.classList.remove(__IED_activeClass);
+        link.classList.remove(__IED_doneClass);
+        link.removeEventListener('click', __IED_selectPost);
+        link.querySelector(`.${__IED_downloadClass}`).remove();
       }
+      __IED_downloadBatch.classList.remove('show');
       __IED_selectDownload = false;
       sendResponse({result: true});
       break;
@@ -521,10 +531,13 @@ const __IED_checkboxClass = '__IED_checkbox';
 const __IED_gridClass = '__IED_grid';
 const __IED_loadingClass = '__IED_loading';
 const __IED_activeClass = '__IED_active';
+const __IED_doneClass = '__IED_done';
 const __IED_newTabClass = '__IED_newTab';
 const __IED_captionClass = '__IED_caption';
 const __IED_containerClass = '__IED_container';
+const __IED_downloadClass = '__IED_download';
 const __IED_downloadButtonID = '__IED_downloadButton';
+const __IED_downloadBatchID = '__IED_downloadBatch';
 const __IED_popupWrapperID = '__IED_popupWrapper';
 const __IED_popupPhotosTitleID = '__IED_popupPhotosTitle';
 const __IED_popupVideosTitleID = '__IED_popupVideosTitle';
@@ -666,16 +679,29 @@ const __IED_hidePopup = () => {
 }
 const __IED_hideImageViewer = () => __IED_imageViewer.classList.remove('show');
 const __IED_selectedPostCount = () => {
-  // TODO count selected post, show button & checkmarks
+  let selectedPosts = document.querySelectorAll(`a[href^="/p/"].${__IED_activeClass}`);
+  if (selectedPosts.length) {
+    __IED_downloadBatch.querySelector('span').innerText = selectedPosts.length;
+    __IED_downloadBatch.classList.add('show');
+  } else {
+    __IED_downloadBatch.classList.remove('show');
+  }
 }
 const __IED_selectPost = (e) => {
-  // TODO add class active
-  __IED_selectedPostCount();
-}
-const __IED_clickPost = (e) => {
   e.preventDefault();
   e.stopPropagation();
   let link = e.currentTarget;
+  if (link.classList.contains(__IED_activeClass)) {
+    link.classList.remove(__IED_activeClass);
+  } else {
+    link.classList.add(__IED_activeClass);
+  }
+  __IED_selectedPostCount();
+}
+const __IED_downloadPost = (link) => {
+  // e.preventDefault();
+  // e.stopPropagation();
+  // let link = e.currentTarget;
   link.classList.add(__IED_loadingClass);
   __IED_sendToBackground('selectDownloadInstagram', {url: link.href});
 }
@@ -967,7 +993,11 @@ const __IED_injectCSS = () => {
   .${__IED_gridClass}.${__IED_activeClass}::after {
     font-size: 15px;
     padding: 6px;
-    background: var(--checkbox-color);
+    border-top-right-radius: 0;
+  }
+  .${__IED_gridClass}.${__IED_doneClass} {
+    outline-width: 3px !important;
+    outline-color: orange !important;
   }
   #${__IED_popupBodyID} .${__IED_containerClass} a.active img,
   #${__IED_popupBodyID} .${__IED_containerClass} a.active video,
@@ -975,14 +1005,52 @@ const __IED_injectCSS = () => {
     display: grid !important;
     outline: 1px solid var(--checkbox-color) !important;
   }
+  .${__IED_gridClass} .${__IED_downloadClass} {
+    z-index: 1;
+    padding: 4px;
+    justify-content: center;
+    border-radius: 0;
+    position: absolute;
+    padding: 5px 16px;
+    border-bottom-right-radius: 0.5rem;
+    transition: opacity .2s ease;
+    opacity: 0;
+  }
+  .${__IED_gridClass} .${__IED_downloadClass}::after {
+    content: 'Download';
+  }
+  .${__IED_gridClass}.${__IED_doneClass} .${__IED_downloadClass} {
+    background: linear-gradient(45deg, orange, #ffc461);
+    opacity: 1;
+  }
+  .${__IED_gridClass}.${__IED_doneClass} .${__IED_downloadClass}::after {
+    content: 'Downloaded';
+  }
+  .${__IED_gridClass}.${__IED_activeClass} .${__IED_downloadClass} {
+    background: linear-gradient(45deg, #4786ff, #47bdff);
+    opacity: 1;
+  }
+  .${__IED_gridClass}.${__IED_activeClass} .${__IED_downloadClass}::after {
+    content: 'Selected';
+  }
+  .${__IED_gridClass}:hover .${__IED_downloadClass} {
+    opacity: 1;
+  }
+  .${__IED_gridClass} .${__IED_downloadClass}:hover::after {
+    content: 'Download';
+  }
   .${__IED_gridClass}.${__IED_activeClass} {
-    outline: 3px solid var(--checkbox-color) !important;
+    outline-width: 3px !important;
+    outline-color: #47b6ff !important;
     transform: scale(1.02);
+  }
+  .${__IED_gridClass}.${__IED_activeClass}::after {
+    background: #47b6ff;
   }
   .${__IED_gridClass}.${__IED_loadingClass} {
     pointer-events: none;
   }
-  .${__IED_gridClass}.${__IED_loadingClass}::after {
+  .${__IED_gridClass}.${__IED_loadingClass}::before {
     content: 'Fetching ...';
     position: absolute;
     text-align: center;
@@ -998,6 +1066,7 @@ const __IED_injectCSS = () => {
     display: flex;
     align-items: center;
     justify-content: center;
+    z-index: 1;
   }
   #${__IED_popupActionID} {
     display: flex;
@@ -1116,6 +1185,21 @@ const __IED_injectCSS = () => {
   #${__IED_imageViewerID}.show {
     pointer-events: auto;
     opacity: 1;
+  }
+  #${__IED_downloadBatchID} {
+    position: fixed;
+    right: 20px;
+    bottom: -20px;
+    opacity: 0;
+    pointer-events: none;
+    padding: 10px 24px;
+    background: linear-gradient(45deg, #bf6631, #ffa273);
+    transition: all .3s ease-out;
+  }
+  #${__IED_downloadBatchID}.show {
+    bottom: 20px;
+    opacity: 1;
+    pointer-events: auto;
   }`;
   document.head.appendChild(css);
 }
@@ -1174,8 +1258,15 @@ document.body.insertAdjacentHTML('beforeend', `
 </div>
 <div id="${__IED_imageViewerID}">
 </div>
+<button id="${__IED_downloadBatchID}" class="${__IED_buttonClass}"><img src="${__IED_iconURL}"/>Batch Download<span></span></button>
 `);
 
+const __IED_downloadSelectedPosts = () => {
+  let selectedPosts = document.querySelectorAll(`a[href^="/p/"].${__IED_activeClass}`);
+  for (let i = 0; i < selectedPosts.length; i++) {
+    __IED_downloadPost(selectedPosts[i]);
+  }
+};
 const __IED_downloadSelectedPics = (download = true) => __IED_downloadSelected(__IED_selectedPhotos, download);
 const __IED_downloadSelectedVids = (download = true) => __IED_downloadSelected(__IED_selectedVideos, download);
 const __IED_downloadSelectedMedia = () => __IED_downloadSelected([...__IED_selectedPhotos, ...__IED_selectedVideos]);
@@ -1210,9 +1301,11 @@ const __IED_popupVideosNT = document.getElementById(__IED_popupVideosNTID);
 const __IED_popupPhotosSelectAll = document.getElementById(__IED_popupPhotosSelectAllID);
 const __IED_popupVideosSelectAll = document.getElementById(__IED_popupVideosSelectAllID);
 const __IED_imageViewer = document.getElementById(__IED_imageViewerID);
+const __IED_downloadBatch = document.getElementById(__IED_downloadBatchID);
 
 __IED_popupWrapper.addEventListener('click', __IED_hidePopup);
 __IED_popupDownloadAll.addEventListener('click', __IED_downloadSelectedMedia);
+__IED_downloadBatch.addEventListener('click', () => __IED_downloadSelectedPosts());
 __IED_popupPhotosDL.addEventListener('click', () => __IED_downloadSelectedPics(true));
 __IED_popupPhotosNT.addEventListener('click', () => __IED_downloadSelectedPics(false));
 __IED_popupVideosDL.addEventListener('click', () => __IED_downloadSelectedVids(true));

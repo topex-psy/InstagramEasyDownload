@@ -82,7 +82,7 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
       if (isSelectOngoing) {
         btnSelectStop.classList.add('show');
         text.innerHTML = `
-        <h1>Select Download is On-Going!</h1>
+        <h1>Batch Download is On-Going!</h1>
         <h3>You can stop anytime by clicking the button below.</h3>
         `;
       } else if (isBulkOngoing) {

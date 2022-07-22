@@ -71,6 +71,9 @@
       .button.button-red {
         filter: hue-rotate(184deg);
       }
+      .button.button-yellow {
+        background: linear-gradient(45deg, #e18632, #fbd272);
+      }
       .button.error {
         filter: blur(2px);
       }
@@ -228,13 +231,12 @@
           <div id="action">
             <button class="button button-blue" id="btn-download-all"><img src="icons/download24.png"/>Download All<span></span></button>
             <button class="button" id="btn-download"><img src="icons/download24.png"/>View/Download</button>
-            <button class="button button-blue" id="btn-bulk-start"><img src="icons/instagram_download24.png"/>Start Bulk Download</button>
-            <button class="button" id="btn-bulk-stop">Stop Bulk Download</button>
-            <button class="button" id="btn-select-stop">Stop Select Download</button>
+            <button class="button button-red" id="btn-bulk-start">Start Bulk Download</button>
+            <button class="button button-yellow" id="btn-bulk-stop">Stop Bulk Download</button>
+            <button class="button button-yellow" id="btn-select-stop">Stop Batch Download</button>
             <button class="button button-red" id="btn-close-tabs">Close Tabs</button>
             <button class="button button-purple" id="btn-recheck">Re-Check</button>
-            <!-- <button class="button button-green" id="btn-extract-media">Extract Media</button> -->
-            <button class="button" id="btn-download-select">Select Download<em>New</em></button>
+            <button class="button" id="btn-download-select">Selected Download<em>New</em></button>
             <div></div>
             <a class="link" id="btn-extract-media">Extract All Media From This Page</a>
           </div>

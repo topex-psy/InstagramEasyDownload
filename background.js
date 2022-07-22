@@ -47,11 +47,9 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
       selectDownload = currentTab.id;
       break;
     case 'selectDownloadInstagram':
-      pics.length = 0;
-      vids.length = 0;
       console.log('[IED] selectDownloadInstagram url', url);
-      fetchInstagramPost(url).then(() => {
-        sendToForeground('selectDownload', {pics, vids}, selectDownload);
+      fetchInstagramPost(url).then((urls) => {
+        sendToForeground('selectDownload', {urls, url}, selectDownload);
       });
       break;
     case 'bulkDownload':
@@ -296,13 +294,16 @@ function setDownloadIcon(tab, site, category, totalDetectedMedia) {
 
     // bulk download per post
     if (bulkDownload == tab.id) {
-      chrome.tabs.sendMessage(tab.id, { action: 'nextPost' }, function(response) {
-        let error = chrome.runtime.lastError;
-        if (error) return console.log('[IED] nextPost error:', error.message);
-        if (!response?.result) {
-          bulkDownload = null;
-        }
+      sendToForeground('nextPost', {}, tab.id, (result) => {
+        if (!result) bulkDownload = null;
       });
+      // chrome.tabs.sendMessage(tab.id, { action: 'nextPost' }, function(response) {
+      //   let error = chrome.runtime.lastError;
+      //   if (error) return console.log('[IED] nextPost error:', error.message);
+      //   if (!response?.result) {
+      //     bulkDownload = null;
+      //   }
+      // });
     }
   }
 }
@@ -425,10 +426,10 @@ function fetchTwitterPost(tab) {
 
 }
 async function fetchInstagramPost(tab) {
-  console.log(`[IED] fetchInstagramPost post tab:`, tab, typeof tab);
+  console.log(`[IED] fetch instagram post post tab:`, tab, typeof tab);
   const isTab = typeof tab !== 'string';
   const postUrl = isTab ? tab.url : tab;
-  console.log(`[IED] fetchInstagramPost post url:`, postUrl);
+  console.log(`[IED] fetch instagram post post url:`, postUrl);
   const fetchUrl = postUrl + (postUrl.includes('?') ? '&' : '?') + '__a=1&__d=dis';
   let data = await fetchWithTimeout(fetchUrl, { timeout: fetchTimeout }).catch(err => {
     console.warn('[IED] read json error', err, typeof err);
@@ -447,6 +448,7 @@ async function fetchInstagramPost(tab) {
     console.warn('[IED] read json got unexpected result!');
     return;
   }
+  let detectionUrls = [];
   let imageVersions = data.items[0].image_versions2;
   let videoVersions = data.items[0].video_versions;
   let carouselMedia = data.items[0].carousel_media;
@@ -466,6 +468,7 @@ async function fetchInstagramPost(tab) {
         };
         console.log("[IED] GOT A INSTAGRAM VIDEO", mediaVideo, JSON.stringify(data, null, 2));
         pushDetectedMedia(data, vids);
+        detectionUrls.push(videoUrl);
       } else if (imageUrl) {
         let data = {
           width: mediaPhoto.width,
@@ -474,9 +477,9 @@ async function fetchInstagramPost(tab) {
         };
         console.log("[IED] GOT A INSTAGRAM PHOTO", mediaPhoto, JSON.stringify(data, null, 2));
         pushDetectedMedia(data, pics);
+        detectionUrls.push(imageUrl);
       }
     });
-    // setDownloadIcon(tab, 'instagram', 'post', carouselMedia.length);
   } else if (videoVersions) {
     let mediaVideo = videoVersions[0];
     let videoUrl = mediaVideo.url;
@@ -489,7 +492,7 @@ async function fetchInstagramPost(tab) {
       };
       console.log("[IED] GOT A INSTAGRAM VIDEO", mediaVideo, JSON.stringify(data, null, 2));
       pushDetectedMedia(data, vids);
-      // setDownloadIcon(tab, 'instagram', 'post', 1);
+      detectionUrls.push(videoUrl);
     }
   } else if (imageVersions) {
     let mediaPhoto = imageVersions.candidates[0];
@@ -502,10 +505,11 @@ async function fetchInstagramPost(tab) {
       };
       console.log("[IED] GOT A INSTAGRAM PHOTO", mediaPhoto, JSON.stringify(data, null, 2));
       pushDetectedMedia(data, pics);
-      // setDownloadIcon(tab, 'instagram', 'post', 1);
+      detectionUrls.push(imageUrl);
     }
   }
   if (isTab) setDownloadIcon(tab, 'instagram', 'post', pics.length + vids.length);
+  return detectionUrls;
 }
 
 async function fetchWithTimeout(url, options = {}) {
