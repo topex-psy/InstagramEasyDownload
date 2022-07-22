@@ -62,7 +62,10 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
       if (__IED_selectDownload) {
         for (let i = 0; i < postLinks.length; i++) {
           let link = postLinks[i];
-          link.classList.remove('loading');
+          if (link.classList.contains(__IED_loadingClass)) {
+            link.classList.remove(__IED_loadingClass);
+            link.classList.add(__IED_activeClass);
+          }
         }
         __IED_downloadSelected([...pics, ...vids].map((media) => media.url), false);
       } else {
@@ -516,6 +519,8 @@ document.onkeydown = (e) => {
 const __IED_buttonClass = '__IED_button';
 const __IED_checkboxClass = '__IED_checkbox';
 const __IED_gridClass = '__IED_grid';
+const __IED_loadingClass = '__IED_loading';
+const __IED_activeClass = '__IED_active';
 const __IED_newTabClass = '__IED_newTab';
 const __IED_captionClass = '__IED_caption';
 const __IED_containerClass = '__IED_container';
@@ -671,7 +676,7 @@ const __IED_clickPost = (e) => {
   e.preventDefault();
   e.stopPropagation();
   let link = e.currentTarget;
-  link.classList.add('loading');
+  link.classList.add(__IED_loadingClass);
   __IED_sendToBackground('selectDownloadInstagram', {url: link.href});
 }
 const __IED_downloadSelected = (urls, download = true) => {
@@ -931,13 +936,15 @@ const __IED_injectCSS = () => {
   #${__IED_popupBodyID} .${__IED_containerClass} a:active {
     opacity: 1;
   }
-  #${__IED_popupBodyID} .${__IED_containerClass} a::after {
+  #${__IED_popupBodyID} .${__IED_containerClass} a::after,
+  .${__IED_gridClass}.${__IED_activeClass}::after {
     content: '✔';
     position: absolute;
     top: -2px;
     right: -2px;
-    background: #249b6ad9;
-    border-radius: 50%;
+    background: #49c59f9e;
+    border-top-right-radius: 0.5rem;
+    border-bottom-left-radius: 50%;
     width: 24px;
     height: 24px;
     line-height: 0;
@@ -952,16 +959,45 @@ const __IED_injectCSS = () => {
     transform: scale(0.5);
     transition: all .15s ease;
   }
-  #${__IED_popupBodyID} .${__IED_containerClass} a.active::after {
+  #${__IED_popupBodyID} .${__IED_containerClass} a.active::after,
+  .${__IED_gridClass}.${__IED_activeClass}::after {
     opacity: 1;
     transform: scale(1);
+  }
+  .${__IED_gridClass}.${__IED_activeClass}::after {
+    font-size: 15px;
+    padding: 6px;
+    background: var(--checkbox-color);
   }
   #${__IED_popupBodyID} .${__IED_containerClass} a.active img,
   #${__IED_popupBodyID} .${__IED_containerClass} a.active video,
   .${__IED_gridClass} {
     display: grid !important;
-    outline: 3px solid #31a97cd1 !important;
+    outline: 1px solid var(--checkbox-color) !important;
+  }
+  .${__IED_gridClass}.${__IED_activeClass} {
+    outline: 3px solid var(--checkbox-color) !important;
     transform: scale(1.02);
+  }
+  .${__IED_gridClass}.${__IED_loadingClass} {
+    pointer-events: none;
+  }
+  .${__IED_gridClass}.${__IED_loadingClass}::after {
+    content: 'Fetching ...';
+    position: absolute;
+    text-align: center;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    padding-top: 24px;
+    font-size: 12px;
+    color: #fff;
+    background: rgba(0,0,0,.5) url(${__IED_iconSpinner}) no-repeat center calc(50% - 10px);
+    background-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   #${__IED_popupActionID} {
     display: flex;
@@ -1117,7 +1153,7 @@ document.body.insertAdjacentHTML('beforeend', `
     </div>
     <div id="${__IED_popupActionID}">
       <div>
-        Displayed wrong items?
+        Displaying wrong items?
         <button class="${__IED_buttonClass}" id="${__IED_popupReloadID}">Reload Page</button>
       </div>
       <div>
