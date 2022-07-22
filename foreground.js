@@ -12,6 +12,7 @@ var __IED_selectedPhotos = [];
 var __IED_selectedVideos = [];
 var __IED_selectedPost = [];
 var __IED_previousHref;
+var __IED_selectDownload = false;
 
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   let { action, next, category, type, observeDOM, pics, vids, url } = request;
@@ -58,12 +59,21 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
       break;
     case 'selectDownload':
       let postLinks = document.querySelectorAll('a[href^="/p/"]');
-      for (let i = 0; i < postLinks.length; i++) {
-        let link = postLinks[i];
-        link.classList.add(__IED_gridClass);
-        link.addEventListener('click', __IED_clickPost);
+      if (__IED_selectDownload) {
+        for (let i = 0; i < postLinks.length; i++) {
+          let link = postLinks[i];
+          link.classList.remove('loading');
+        }
+        __IED_downloadSelected([...pics, ...vids].map((media) => media.url), false);
+      } else {
+        alert("Let's click on any post to download its media!");
+        for (let i = 0; i < postLinks.length; i++) {
+          let link = postLinks[i];
+          link.classList.add(__IED_gridClass);
+          link.addEventListener('click', __IED_clickPost);
+        }
+        __IED_selectDownload = true;
       }
-      // TODO select download
       sendResponse({result: true});
       break;
     case 'bulkDownload':
@@ -80,6 +90,16 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         alert('No post found in this page!');
       }
       sendResponse({result: bulkDownload});
+      break;
+    case 'selectStop':
+      let posts = document.querySelectorAll('a[href^="/p/"]');
+      for (let i = 0; i < posts.length; i++) {
+        let link = posts[i];
+        link.classList.remove(__IED_gridClass);
+        link.removeEventListener('click', __IED_clickPost);
+      }
+      __IED_selectDownload = false;
+      sendResponse({result: true});
       break;
     case 'nextPost':
       __IED_downloadSelected(null, false); // open in new tab
@@ -542,7 +562,6 @@ let __IED_createLink = (category, media) => {
     preview = document.createElement("video");
     preview.src = url;
     preview.controls = true;
-    preview.appendChild(source);
   }
   let div = document.createElement("div");
   let expand = document.createElement("div");
@@ -571,7 +590,7 @@ let __IED_createLink = (category, media) => {
   return div;
 };
 
-const __IED_sendToBackground = (action, messages) => {
+const __IED_sendToBackground = (action, messages = {}) => {
   chrome.runtime?.sendMessage({action, url: window.location.href, ...messages}, function(response) {
     let error = chrome.runtime.lastError;
     if (error) return console.log(`[IED] ${action} error`, error.message);
@@ -650,7 +669,10 @@ const __IED_selectPost = (e) => {
 }
 const __IED_clickPost = (e) => {
   e.preventDefault();
-  __IED_sendToBackground('selectDownloadInstagram');
+  e.stopPropagation();
+  let link = e.currentTarget;
+  link.classList.add('loading');
+  __IED_sendToBackground('selectDownloadInstagram', {url: link.href});
 }
 const __IED_downloadSelected = (urls, download = true) => {
   urls = urls || [...__IED_detectedPhotos, ...__IED_detectedVideos].map((media) => media.url);

@@ -8,6 +8,7 @@ const btnBulkStop = document.getElementById("btn-bulk-stop");
 const btnDownload = document.getElementById("btn-download");
 const btnDownloadAll = document.getElementById("btn-download-all");
 const btnDownloadSelect = document.getElementById("btn-download-select");
+const btnSelectStop = document.getElementById("btn-select-stop");
 const btnExtractMedia = document.getElementById("btn-extract-media");
 const btnCloseTabs = document.getElementById("btn-close-tabs");
 const btnRecheck = document.getElementById("btn-recheck");
@@ -28,8 +29,9 @@ function sendAction(action, callback = () => {}) {
 
 btnBulkStart.addEventListener('click', () => sendAction('bulkDownload', window.close));
 btnBulkStop.addEventListener('click', () => {
-  if (confirm('Are you sure you want to stop the operation now?')) sendAction('escapeKey', window.close);
+  if (confirm('Are you sure you want to stop the operation now?')) sendAction('bulkStop', window.close);
 });
+btnSelectStop.addEventListener('click', () => sendAction('bulkStop', window.close));
 btnDownload.addEventListener('click', () => sendAction('showPopup', window.close));
 btnDownloadAll.addEventListener('click', downloadTabs);
 btnDownloadSelect.addEventListener('click', () => sendAction('selectDownload', window.close));
@@ -55,7 +57,7 @@ sendAction('handshake', (response) => {
 
 chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
   console.log('got message', message);
-  let { action, url, pics, vids, tabs, isBulkAvaiable, isBulkOngoing } = message;
+  let { action, url, pics, vids, tabs, isBulkAvaiable, isBulkOngoing, isSelectOngoing } = message;
   let mediaCount = pics?.length + vids?.length;
   let response = {'ok': true};
   switch (action) {
@@ -77,7 +79,13 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
         sendAction('showPopup', window.close);
         break;
       }
-      if (isBulkOngoing) {
+      if (isSelectOngoing) {
+        btnSelectStop.classList.add('show');
+        text.innerHTML = `
+        <h1>Select Download is On-Going!</h1>
+        <h3>You can stop anytime by clicking the button below.</h3>
+        `;
+      } else if (isBulkOngoing) {
         btnBulkStop.classList.add('show');
         text.innerHTML = `
         <h1>Bulk Download is On-Going!</h1>
