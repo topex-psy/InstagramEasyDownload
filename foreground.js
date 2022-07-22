@@ -23,15 +23,28 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
       sendResponse({result: true});
       break;
     case 'extractMedia':
-      let els = document.querySelectorAll("img, video");
+      let els = document.querySelectorAll('img, video, [data-visualcompletion="css-img"], [role="img"]');
       __IED_detectedPhotos.length = 0;
       __IED_detectedVideos.length = 0;
       let urls = [];
       for (let i = 0; i < els.length; i++) {
         let el = els[i];
         if (el.closest(`#${__IED_popupID}`) || el.closest(`#${__IED_imageViewerID}`)) continue; // exclude our elements
-        let mediaType = el.tagName.toLocaleLowerCase() == 'img' ? 'photo' : 'video';
-        let mediaUrl = mediaType == 'photo' ? el.src : el.querySelector('source').src;
+        let mediaType = 'photo';
+        let mediaUrl;
+        switch (el.tagName.toLocaleLowerCase()) {
+          case 'video':
+            mediaType = 'video';
+            mediaUrl = el.src || el.querySelector('source')?.src;
+            break;
+          case 'img':
+            mediaUrl = el.src;
+            break;
+          default:
+            let style = el.currentStyle || window.getComputedStyle(el, false);
+            mediaUrl = style.backgroundImage.slice(4, -1).replace(/"/g, "");
+        }
+        if (!mediaUrl) continue;
         let media = {url: mediaUrl, hd: mediaUrl};
         urls.push(media.url);
         if (mediaType == 'photo') {
@@ -47,7 +60,8 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
       let postLinks = document.querySelectorAll('a[href^="/p/"]');
       for (let i = 0; i < postLinks.length; i++) {
         let link = postLinks[i];
-        link.addEventListener('click', __IED_selectPost);
+        link.classList.add(__IED_gridClass);
+        link.addEventListener('click', __IED_clickPost);
       }
       // TODO select download
       sendResponse({result: true});
@@ -213,7 +227,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
               if (window.location.href != __IED_previousHref) {
                 console.info('[FED] URL has changed and removed our button, here we go again ...\nAdded:', addedNodes, '\nRemoved:', removedNodes);
                 console.info('[FED] URL change: ', __IED_previousHref, '->', window.location.href);
-                // TODO reanalyze
+                __IED_reanalyze();
               } else if (!btnDownload) {
                 console.info('[FED] DOM has changed and removed our button, here we go again ...\nAdded:', addedNodes, '\nRemoved:', removedNodes);
                 putButton();
@@ -481,6 +495,7 @@ document.onkeydown = (e) => {
 
 const __IED_buttonClass = '__IED_button';
 const __IED_checkboxClass = '__IED_checkbox';
+const __IED_gridClass = '__IED_grid';
 const __IED_newTabClass = '__IED_newTab';
 const __IED_captionClass = '__IED_caption';
 const __IED_containerClass = '__IED_container';
@@ -521,14 +536,11 @@ let __IED_createLink = (category, media) => {
       node = document.createElement("img");
       node.src = thumbnail;
     } else {
-      let source = document.createElement("source");
-      source.src = media.sd || media.hd;
       node = document.createElement("video");
-      node.appendChild(source);
+      node.src = media.sd || media.hd;
     }
-    let source = document.createElement("source");
-    source.src = url;
     preview = document.createElement("video");
+    preview.src = url;
     preview.controls = true;
     preview.appendChild(source);
   }
@@ -623,19 +635,22 @@ const __IED_showImageViewer = (node) => {
   __IED_imageViewer.appendChild(node);
   __IED_imageViewer.classList.add('show');
 }
+const __IED_reanalyze = () => __IED_sendToBackground('recheck');
 const __IED_hidePopup = () => {
   __IED_popupWrapper.classList.remove('show');
-  __IED_sendToBackground('recheck');
+  __IED_reanalyze();
 }
 const __IED_hideImageViewer = () => __IED_imageViewer.classList.remove('show');
 const __IED_selectedPostCount = () => {
   // TODO count selected post, show button & checkmarks
 }
 const __IED_selectPost = (e) => {
+  // TODO add class active
+  __IED_selectedPostCount();
+}
+const __IED_clickPost = (e) => {
   e.preventDefault();
-  // TODO fetch twitter post
-  // __IED_selectedPost.push(e.currentTarget.href);
-  // __IED_selectedPostCount();
+  __IED_sendToBackground('selectDownloadInstagram');
 }
 const __IED_downloadSelected = (urls, download = true) => {
   urls = urls || [...__IED_detectedPhotos, ...__IED_detectedVideos].map((media) => media.url);
@@ -920,8 +935,10 @@ const __IED_injectCSS = () => {
     transform: scale(1);
   }
   #${__IED_popupBodyID} .${__IED_containerClass} a.active img,
-  #${__IED_popupBodyID} .${__IED_containerClass} a.active video {
-    outline: 3px solid #31a97cd1;
+  #${__IED_popupBodyID} .${__IED_containerClass} a.active video,
+  .${__IED_gridClass} {
+    display: grid !important;
+    outline: 3px solid #31a97cd1 !important;
     transform: scale(1.02);
   }
   #${__IED_popupActionID} {

@@ -52,6 +52,9 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         console.log('[IED] selectDownload result:', response?.result);
       });
       break;
+    case 'selectDownloadInstagram':
+      // TODO fetch instagram post & direct download
+      break;
     case 'bulkDownload':
       chrome.tabs.sendMessage(currentTab.id, { action: 'bulkDownload' }, function(response) {
         let error = chrome.runtime.lastError;
@@ -347,56 +350,55 @@ function fetchTwitterPost(tab) {
   let statusID = tab.url.split('/status/').pop().split('/')[0];
   let fetchUrl = `https://cdn.syndication.twimg.com/tweet?id=${statusID}`;
   console.log(`[IED] should fetch:`, fetchUrl);
-  fetchWithTimeout(fetchUrl, { timeout: fetchTimeout }).then(data => {
-    getCurrentTab((tabCurrent) => {
-      if (tabCurrent?.url !== tab.url) {
-        console.log('[IED] fetch result ignored because url changed');
-        return;
-      }
-      console.log(`[IED] fetch result:`, data);
-      let findVideos = data.video?.variants.filter((variant) => variant.type == "video/mp4") || [];
-      let findPhotos = data.photos || [];
-      let owner = data.user?.name;
-      let title = owner ? `${owner}'s Video` : data.text;
-      // if (!findVideos.length && !findPhotos.length) return;
-      if (findVideos.length) {
-        let findLargest = findVideos.sort((a,b) => {
-          let widthA = a.src.split('/vid/').pop().split('x')[0];
-          let widthB = b.src.split('/vid/').pop().split('x')[0];
-          return widthA > widthB ? -1 : widthA < widthB ? 1 : 0;
-        });
-        let hd = findLargest[0].src;
-        let sd = findLargest.length > 1 ? findLargest[1].src : hd;
+  fetchWithTimeout(fetchUrl, { timeout: fetchTimeout }).then(async data => {
+    let tabCurrent = await getCurrentTab();
+    if (tabCurrent?.url !== tab.url) {
+      console.log('[IED] fetch result ignored because url changed');
+      return;
+    }
+    console.log(`[IED] fetch result:`, data);
+    let findVideos = data.video?.variants.filter((variant) => variant.type == "video/mp4") || [];
+    let findPhotos = data.photos || [];
+    let owner = data.user?.name;
+    let title = owner ? `${owner}'s Video` : data.text;
+    // if (!findVideos.length && !findPhotos.length) return;
+    if (findVideos.length) {
+      let findLargest = findVideos.sort((a,b) => {
+        let widthA = a.src.split('/vid/').pop().split('x')[0];
+        let widthB = b.src.split('/vid/').pop().split('x')[0];
+        return widthA > widthB ? -1 : widthA < widthB ? 1 : 0;
+      });
+      let hd = findLargest[0].src;
+      let sd = findLargest.length > 1 ? findLargest[1].src : hd;
+      let item = {
+        id: statusID,
+        hd,
+        sd,
+        thumbnail: data.video?.poster,
+        duration: data.video?.durationMs,
+        permalink: data.entities?.media[0].expanded_url,
+        owner,
+        title,
+      };
+      console.log("[IED] GOT A TWITTER VIDEO", data.video, JSON.stringify(item, null, 2));
+      pushDetectedMedia(item, vids);
+    } else if (findPhotos.length) {
+      findPhotos.forEach((photo) => {
+        // original size image, but a bit noisy: https://pbs.twimg.com/media/FYBuHjvacAEMUZd?format=png&name=4096x4096
+        let suffix = '?format=png&name=4096x4096';
+        // let suffix = '?format=png&name=large';
         let item = {
-          id: statusID,
-          hd,
-          sd,
-          thumbnail: data.video?.poster,
-          duration: data.video?.durationMs,
-          permalink: data.entities?.media[0].expanded_url,
-          owner,
-          title,
-        };
-        console.log("[IED] GOT A TWITTER VIDEO", data.video, JSON.stringify(item, null, 2));
-        pushDetectedMedia(item, vids);
-      } else if (findPhotos.length) {
-        findPhotos.forEach((photo) => {
-          // original size image, but a bit noisy: https://pbs.twimg.com/media/FYBuHjvacAEMUZd?format=png&name=4096x4096
-          let suffix = '?format=png&name=4096x4096';
-          // let suffix = '?format=png&name=large';
-          let item = {
-            sd: photo.url,
-            hd: photo.url.split('.').slice(0, -1).join('.') + suffix,
-            permalink: photo.expandedUrl,
-            width: photo.width,
-            height: photo.height,
-          }
-          console.log("[IED] GOT A TWITTER PHOTO", photo, JSON.stringify(item, null, 2));
-          pushDetectedMedia(item, pics);
-        });
-      }
-      setDownloadIcon(tab, 'twitter', 'post', pics.length + vids.length);
-    });
+          sd: photo.url,
+          hd: photo.url.split('.').slice(0, -1).join('.') + suffix,
+          permalink: photo.expandedUrl,
+          width: photo.width,
+          height: photo.height,
+        }
+        console.log("[IED] GOT A TWITTER PHOTO", photo, JSON.stringify(item, null, 2));
+        pushDetectedMedia(item, pics);
+      });
+    }
+    setDownloadIcon(tab, 'twitter', 'post', pics.length + vids.length);
   }).catch(err => {
     console.warn(`[IED] couldn't fetch twitter post`, err, typeof err);
     setTimeout(() => {
@@ -409,65 +411,37 @@ function fetchTwitterPost(tab) {
 function fetchInstagramPost(tab) {
   const getParams = '__a=1&__d=dis';
   const fetchUrl = tab.url + (tab.url.includes('?') ? '&' : '?') + getParams;
-  fetchWithTimeout(fetchUrl, { timeout: fetchTimeout }).then(data => {
-    getCurrentTab((tabCurrent) => {
-      if (tabCurrent?.url !== tab.url) {
-        console.log('[IED] fetch result ignored because url changed');
-        return;
-      }
-      // console.log('[IED] read json success', JSON.stringify(data, null, 2));
-      if (!data.items) {
-        console.warn('[IED] read json got unexpected result!');
-        return;
-      }
-      let imageVersions = data.items[0].image_versions2;
-      let videoVersions = data.items[0].video_versions;
-      let carouselMedia = data.items[0].carousel_media;
-      if (carouselMedia) {
-        carouselMedia.forEach((media) => {
-          console.log("[IED] carouselMedia", media);
-          let mediaPhoto = media.image_versions2.candidates[0];
-          let mediaVideo = media.video_versions ? media.video_versions[0] : null;
-          let imageUrl = mediaPhoto.url;
-          let videoUrl = mediaVideo?.url;
-          if (videoUrl) {
-            let data = {
-              id: mediaVideo?.id,
-              width: mediaVideo?.width,
-              height: mediaVideo?.height,
-              hd: videoUrl,
-            };
-            console.log("[IED] GOT A INSTAGRAM VIDEO", mediaVideo, JSON.stringify(data, null, 2));
-            pushDetectedMedia(data, vids);
-          } else if (imageUrl) {
-            let data = {
-              width: mediaPhoto.width,
-              height: mediaPhoto.height,
-              hd: imageUrl,
-            };
-            console.log("[IED] GOT A INSTAGRAM PHOTO", mediaPhoto, JSON.stringify(data, null, 2));
-            pushDetectedMedia(data, pics);
-          }
-        });
-        setDownloadIcon(tab, 'instagram', 'post', carouselMedia.length);
-      } else if (videoVersions) {
-        let mediaVideo = videoVersions[0];
-        let videoUrl = mediaVideo.url;
+  fetchWithTimeout(fetchUrl, { timeout: fetchTimeout }).then(async data => {
+    let tabCurrent = await getCurrentTab();
+    if (tabCurrent?.url !== tab.url) {
+      console.log('[IED] fetch result ignored because url changed');
+      return;
+    }
+    // console.log('[IED] read json success', JSON.stringify(data, null, 2));
+    if (!data.items) {
+      console.warn('[IED] read json got unexpected result!');
+      return;
+    }
+    let imageVersions = data.items[0].image_versions2;
+    let videoVersions = data.items[0].video_versions;
+    let carouselMedia = data.items[0].carousel_media;
+    if (carouselMedia) {
+      carouselMedia.forEach((media) => {
+        console.log("[IED] carouselMedia", media);
+        let mediaPhoto = media.image_versions2.candidates[0];
+        let mediaVideo = media.video_versions ? media.video_versions[0] : null;
+        let imageUrl = mediaPhoto.url;
+        let videoUrl = mediaVideo?.url;
         if (videoUrl) {
           let data = {
-            id: mediaVideo.id,
-            width: mediaVideo.width,
-            height: mediaVideo.height,
+            id: mediaVideo?.id,
+            width: mediaVideo?.width,
+            height: mediaVideo?.height,
             hd: videoUrl,
           };
           console.log("[IED] GOT A INSTAGRAM VIDEO", mediaVideo, JSON.stringify(data, null, 2));
           pushDetectedMedia(data, vids);
-          setDownloadIcon(tab, 'instagram', 'post', 1);
-        }
-      } else if (imageVersions) {
-        let mediaPhoto = imageVersions.candidates[0];
-        let imageUrl = mediaPhoto.url;
-        if (imageUrl) {
+        } else if (imageUrl) {
           let data = {
             width: mediaPhoto.width,
             height: mediaPhoto.height,
@@ -475,10 +449,37 @@ function fetchInstagramPost(tab) {
           };
           console.log("[IED] GOT A INSTAGRAM PHOTO", mediaPhoto, JSON.stringify(data, null, 2));
           pushDetectedMedia(data, pics);
-          setDownloadIcon(tab, 'instagram', 'post', 1);
         }
+      });
+      setDownloadIcon(tab, 'instagram', 'post', carouselMedia.length);
+    } else if (videoVersions) {
+      let mediaVideo = videoVersions[0];
+      let videoUrl = mediaVideo.url;
+      if (videoUrl) {
+        let data = {
+          id: mediaVideo.id,
+          width: mediaVideo.width,
+          height: mediaVideo.height,
+          hd: videoUrl,
+        };
+        console.log("[IED] GOT A INSTAGRAM VIDEO", mediaVideo, JSON.stringify(data, null, 2));
+        pushDetectedMedia(data, vids);
+        setDownloadIcon(tab, 'instagram', 'post', 1);
       }
-    });
+    } else if (imageVersions) {
+      let mediaPhoto = imageVersions.candidates[0];
+      let imageUrl = mediaPhoto.url;
+      if (imageUrl) {
+        let data = {
+          width: mediaPhoto.width,
+          height: mediaPhoto.height,
+          hd: imageUrl,
+        };
+        console.log("[IED] GOT A INSTAGRAM PHOTO", mediaPhoto, JSON.stringify(data, null, 2));
+        pushDetectedMedia(data, pics);
+        setDownloadIcon(tab, 'instagram', 'post', 1);
+      }
+    }
   }).catch(err => {
     console.warn('[IED] read json error', err, typeof err);
     setTimeout(() => {
@@ -503,7 +504,7 @@ async function fetchWithTimeout(url, options = {}) {
 async function getCurrentTab(todo) {
   let queryOptions = { active: true, currentWindow: true, lastFocusedWindow: true };
   let [tab] = await chrome.tabs.query(queryOptions);
-  todo(tab);
+  return tab;
 }
 
 async function detectTabs() {
@@ -519,7 +520,7 @@ function isMediaURL(url) {
 }
 
 function analyzeTab() {
-  getCurrentTab(analyze);
+  analyze(getCurrentTab());
 }
 
 analyzeTab();
