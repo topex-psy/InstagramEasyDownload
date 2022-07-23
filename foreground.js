@@ -11,6 +11,7 @@ var __IED_detectedVideos = [];
 var __IED_selectedPhotos = [];
 var __IED_selectedVideos = [];
 var __IED_selectedPost = [];
+var __IED_selectedDone = [];
 var __IED_previousHref;
 var __IED_selectDownload = false;
 
@@ -59,29 +60,22 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
       if (__IED_selectDownload) {
         if (urls) {
           // let link = document.querySelector('a[href="/p/CfnZJctLlDf/"]');
-          let link = document.querySelector(`a[href="${url.split('.com').pop()}"]`);
-          if (link.classList.contains(__IED_loadingClass)) {
-            link.classList.remove(__IED_loadingClass);
-            link.classList.remove(__IED_activeClass);
-            link.classList.add(__IED_doneClass);
-          }
+          // let link = document.querySelector(`a[href="${url.split('.com').pop()}"]`);
+          let link = __IED_getPostByURL(url);
+          link?.classList.remove(__IED_loadingClass);
+          link?.classList.remove(__IED_activeClass);
+          link?.classList.add(__IED_doneClass);
+          let index = __IED_selectedPost.indexOf(url);
+          __IED_selectedPost.splice(index, 1);
+          __IED_selectedDone.push(url);
+          __IED_selectedPostCount();
           __IED_downloadSelected(urls, false);
         }
       } else {
-        let postLinks = document.querySelectorAll('a[href^="/p/"]');
         alert("Let's click any post you like to be selected for a batch download!");
-        for (let i = 0; i < postLinks.length; i++) {
-          let link = postLinks[i];
-          link.classList.add(__IED_gridClass);
-          link.addEventListener('click', __IED_selectPost);
-
-          let dl = document.createElement("button");
-          dl.classList.add(__IED_buttonClass);
-          dl.classList.add(__IED_downloadClass);
-          dl.onclick = () => __IED_downloadPost(link);
-          link.appendChild(dl);
-        }
+        __IED_removeDownloadButton();
         __IED_selectDownload = true;
+        __IED_batchPosts();
       }
       sendResponse({result: true});
       break;
@@ -108,9 +102,11 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         link.classList.remove(__IED_activeClass);
         link.classList.remove(__IED_doneClass);
         link.removeEventListener('click', __IED_selectPost);
-        link.querySelector(`.${__IED_downloadClass}`).remove();
+        link.querySelector(`.${__IED_downloadClass}`)?.remove();
       }
       __IED_downloadBatch.classList.remove('show');
+      __IED_selectedPost.length = 0;
+      __IED_selectedDone.length = 0;
       __IED_selectDownload = false;
       sendResponse({result: true});
       break;
@@ -121,6 +117,13 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
       sendResponse({result: button != null});
       break;
     case 'putDownloadButton':
+      if (!pics.length && !vids.length) {
+        __IED_removeDownloadButton();
+        sendResponse({
+          result: 'removed',
+        });
+        break;
+      }
       let isObserved = false;
       let feedContainer = document.body;
       let findContainer = () => {
@@ -238,8 +241,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         btn.addEventListener('click', __IED_showPopup);
 
         try {
-          let prevButton = document.getElementById(__IED_downloadButtonID);
-          prevButton?.remove();
+          __IED_removeDownloadButton();
           let containerPosition = getComputedStyle(container).position;
           if (!['absolute', 'relative'].includes(containerPosition)) {
             container.style.position = 'relative';
@@ -280,6 +282,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
       sendResponse({
         result: 'ok',
         container: feedContainer?.tagName.toLowerCase(),
+        url: window.location.href,
         isObserved,
       });
       break;
@@ -516,16 +519,6 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   }
 });
 
-document.onkeydown = (e) => {
-  if (e.key === "Escape") {
-    if (__IED_popupWrapper.classList.includes('show')) {
-      e.preventDefault();
-      e.stopPropagation();
-      __IED_hidePopup();
-    }
-  }
-};
-
 const __IED_buttonClass = '__IED_button';
 const __IED_checkboxClass = '__IED_checkbox';
 const __IED_gridClass = '__IED_grid';
@@ -679,9 +672,11 @@ const __IED_hidePopup = () => {
 }
 const __IED_hideImageViewer = () => __IED_imageViewer.classList.remove('show');
 const __IED_selectedPostCount = () => {
-  let selectedPosts = document.querySelectorAll(`a[href^="/p/"].${__IED_activeClass}`);
-  if (selectedPosts.length) {
-    __IED_downloadBatch.querySelector('span').innerText = selectedPosts.length;
+  console.log('[IED] counting selected posts', __IED_selectedPost);
+  // let total = document.querySelectorAll(`a[href^="/p/"].${__IED_activeClass}`).length;
+  let total = __IED_selectedPost.length;
+  if (total) {
+    __IED_downloadBatch.querySelector('span').innerText = total;
     __IED_downloadBatch.classList.add('show');
   } else {
     __IED_downloadBatch.classList.remove('show');
@@ -693,17 +688,20 @@ const __IED_selectPost = (e) => {
   let link = e.currentTarget;
   if (link.classList.contains(__IED_activeClass)) {
     link.classList.remove(__IED_activeClass);
+    let index = __IED_selectedPost.indexOf(link.href);
+    if (index !== -1) __IED_selectedPost.splice(index, 1);
   } else {
     link.classList.add(__IED_activeClass);
+    __IED_selectedPost.push(link.href);
   }
   __IED_selectedPostCount();
 }
-const __IED_downloadPost = (link) => {
-  // e.preventDefault();
-  // e.stopPropagation();
-  // let link = e.currentTarget;
-  link.classList.add(__IED_loadingClass);
-  __IED_sendToBackground('selectDownloadInstagram', {url: link.href});
+const __IED_getPostByURL = (url) => {
+  return document.querySelector(`a[href="${url.split('.com').pop()}"]`);
+};
+const __IED_downloadPost = (url) => {
+  __IED_getPostByURL(url)?.classList.add(__IED_loadingClass);
+  __IED_sendToBackground('selectDownloadInstagram', {url});
 }
 const __IED_downloadSelected = (urls, download = true) => {
   urls = urls || [...__IED_detectedPhotos, ...__IED_detectedVideos].map((media) => media.url);
@@ -720,6 +718,33 @@ const __IED_downloadSelected = (urls, download = true) => {
   });
   if (download) __IED_hidePopup();
 }
+const __IED_debounce = (method, delay) => {
+  clearTimeout(method._tId);
+  method._tId = setTimeout(method, delay);
+};
+const __IED_onPageScroll = () => {
+  if (__IED_selectDownload) __IED_debounce(__IED_batchPosts, 500);
+};
+const __IED_batchPosts = () => {
+  for (let i = 0; i < __IED_selectedPost.length; i++) {
+    __IED_getPostByURL(__IED_selectedPost[i])?.classList.add(__IED_activeClass);
+  }
+  for (let i = 0; i < __IED_selectedDone.length; i++) {
+    __IED_getPostByURL(__IED_selectedDone[i])?.classList.add(__IED_doneClass);
+  }
+  let postLinks = document.querySelectorAll(`a[href^="/p/"]:not(.${__IED_gridClass})`);
+  for (let i = 0; i < postLinks.length; i++) {
+    let link = postLinks[i];
+    link.classList.add(__IED_gridClass);
+    link.addEventListener('click', __IED_selectPost);
+    let dl = document.createElement("button");
+    dl.classList.add(__IED_buttonClass);
+    dl.classList.add(__IED_downloadClass);
+    dl.onclick = () => __IED_downloadPost(link.href);
+    link.appendChild(dl);
+  }
+  __IED_selectedPostCount();
+};
 const __IED_observeDOM = (function() {
   var MutationObserver = window.MutationObserver || window.WebKitMutationObserver;
   return function(obj, callback) {
@@ -916,11 +941,12 @@ const __IED_injectCSS = () => {
   #${__IED_popupBodyID} .${__IED_containerClass} video {
     height: 120px;
     border-radius: 0.5rem;
-    cursor: pointer;
-    transition: all .2s ease-out;
   }
-  #${__IED_popupBodyID} .${__IED_containerClass} img:hover,
-  #${__IED_popupBodyID} .${__IED_containerClass} video:hover {
+  #${__IED_popupBodyID} .${__IED_containerClass} a {
+    transition: all .2s ease-out;
+    cursor: pointer;
+  }
+  #${__IED_popupBodyID} .${__IED_containerClass} a:hover {
     transform: scale(1.05);
     filter: brightness(1.1) contrast(1) drop-shadow(0 2px 5px rgba(0,0,0,.2));
   }
@@ -966,9 +992,9 @@ const __IED_injectCSS = () => {
   .${__IED_gridClass}.${__IED_activeClass}::after {
     content: '✔';
     position: absolute;
-    top: -2px;
-    right: -2px;
-    background: #49c59f9e;
+    top: -1px;
+    right: -1px;
+    background: var(--checkbox-color);
     border-top-right-radius: 0.5rem;
     border-bottom-left-radius: 50%;
     width: 24px;
@@ -1003,7 +1029,15 @@ const __IED_injectCSS = () => {
   #${__IED_popupBodyID} .${__IED_containerClass} a.active video,
   .${__IED_gridClass} {
     display: grid !important;
-    outline: 1px solid var(--checkbox-color) !important;
+    outline: 2px solid var(--checkbox-color) !important;
+  }
+  .${__IED_gridClass},
+  .${__IED_gridClass} > div {
+    border-radius: 0.5rem;
+    overflow: hidden;
+  }
+  .${__IED_gridClass}:hover {
+    outline-width: 3px !important;
   }
   .${__IED_gridClass} .${__IED_downloadClass} {
     z-index: 1;
@@ -1013,6 +1047,7 @@ const __IED_injectCSS = () => {
     position: absolute;
     padding: 5px 16px;
     border-bottom-right-radius: 0.5rem;
+    border-top-left-radius: 0.5rem;
     transition: opacity .2s ease;
     opacity: 0;
   }
@@ -1020,7 +1055,7 @@ const __IED_injectCSS = () => {
     content: 'Download';
   }
   .${__IED_gridClass}.${__IED_doneClass} .${__IED_downloadClass} {
-    background: linear-gradient(45deg, orange, #ffc461);
+    background: linear-gradient(45deg, #e18632, #fbd272);
     opacity: 1;
   }
   .${__IED_gridClass}.${__IED_doneClass} .${__IED_downloadClass}::after {
@@ -1261,10 +1296,13 @@ document.body.insertAdjacentHTML('beforeend', `
 <button id="${__IED_downloadBatchID}" class="${__IED_buttonClass}"><img src="${__IED_iconURL}"/>Batch Download<span></span></button>
 `);
 
+const __IED_removeDownloadButton = () => {
+  let btnDownload = document.getElementById(__IED_downloadButtonID);
+  btnDownload?.remove();
+};
 const __IED_downloadSelectedPosts = () => {
-  let selectedPosts = document.querySelectorAll(`a[href^="/p/"].${__IED_activeClass}`);
-  for (let i = 0; i < selectedPosts.length; i++) {
-    __IED_downloadPost(selectedPosts[i]);
+  for (let i = 0; i < __IED_selectedPost.length; i++) {
+    __IED_downloadPost(__IED_selectedPost[i]);
   }
 };
 const __IED_downloadSelectedPics = (download = true) => __IED_downloadSelected(__IED_selectedPhotos, download);
@@ -1341,6 +1379,18 @@ window.addEventListener('hashchange', function() {
 });
 window.addEventListener('popstate', function(e) {
   console.log("[FED] URL changed pop!", window.location.href, e.state);
+  __IED_removeDownloadButton();
+});
+
+document.addEventListener('scroll', __IED_onPageScroll);
+document.addEventListener('keydown', (e) => {
+  if (e.key === "Escape") {
+    if (__IED_popupWrapper.classList.contains('show')) {
+      e.preventDefault();
+      e.stopPropagation();
+      __IED_hidePopup();
+    }
+  }
 });
 
 __IED_injectCSS();

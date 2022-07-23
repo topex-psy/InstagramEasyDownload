@@ -312,8 +312,8 @@ function putDownloadButton(tab, site, category, type, observeDOM = true, retry =
   chrome.tabs.sendMessage(tab.id, { action: 'putDownloadButton', category, type, observeDOM, pics, vids }, function(response) {
     let error = chrome.runtime.lastError;
     if (error) return console.log(`[IED] putDownloadButton ${site} error:`, error.message);
-    console.log(`[IED] putDownloadButton ${site} result:`, response);
-    if (response?.container == 'body') { // container not found yet
+    console.log(`[IED] putDownloadButton ${site} result:`, response, tab.url);
+    if (response?.container == 'body' && response?.url == tab.url) { // container not found yet
       if (retry < 10) { // max retry is 10 seconds
         setTimeout(() => { // wait another second for right container to be found
           putDownloadButton(tab, site, category, type, !response.isObserved, retry + 1);
