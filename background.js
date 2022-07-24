@@ -43,8 +43,9 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
       sendToForeground('extractMedia');
       break;
     case 'selectDownload':
-      sendToForeground('selectDownload');
-      selectDownload = currentTab.id;
+      sendToForeground('selectDownload', {}, null, (result) => {
+        if (result) selectDownload = currentTab.id;
+      });
       break;
     case 'selectDownloadInstagram':
       console.log('[IED] selectDownloadInstagram url', url);
