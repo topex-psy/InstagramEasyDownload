@@ -83,6 +83,11 @@ chrome.tabs.onUpdated.addListener(async function(tabId, info, tab) {
     analyze(tab);
   }
 });
+chrome.tabs.onRemoved.addListener(function(tabId, removed) {
+  if (selectDownload == tabId || bulkDownload == tabId) {
+    stopBulkDownload();
+  }
+});
 chrome.windows.onFocusChanged.addListener(function(window) {
   inFocus = window != chrome.windows.WINDOW_ID_NONE;
   console.log('[IED] window focus', inFocus);

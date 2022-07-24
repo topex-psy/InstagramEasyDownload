@@ -1448,7 +1448,11 @@ window.addEventListener('popstate', function(e) {
 document.addEventListener('scroll', __IED_onPageScroll);
 document.addEventListener('keydown', (e) => {
   if (e.key === "Escape") {
-    if (__IED_popupWrapper.classList.contains('show')) {
+    if (__IED_imageViewer.classList.contains('show')) {
+      e.preventDefault();
+      e.stopPropagation();
+      __IED_hideImageViewer();
+    } else if (__IED_popupWrapper.classList.contains('show')) {
       e.preventDefault();
       e.stopPropagation();
       __IED_hidePopup();

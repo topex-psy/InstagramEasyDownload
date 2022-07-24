@@ -36,7 +36,7 @@ btnDownload.addEventListener('click', () => sendAction('showPopup', window.close
 btnDownloadAll.addEventListener('click', downloadTabs);
 btnDownloadSelect.addEventListener('click', () => sendAction('selectDownload', window.close));
 btnExtractMedia.addEventListener('click', () => sendAction('extractMedia', window.close));
-btnCloseTabs.addEventListener('click', e => {
+btnCloseTabs.addEventListener('click', () => {
   downloadedTabs.forEach((tab) => {
     try {
       chrome.tabs.remove(+tab.id);
@@ -139,3 +139,5 @@ function downloadTabs() {
   btnCloseTabs.innerText = `Close ${downloadedTabs.length} Tabs`;
   btnCloseTabs.classList.add('show');
 }
+
+document.getElementById('footer').addEventListener('click', () => chrome.tabs.create({ url: 'onboarding.html' }));
